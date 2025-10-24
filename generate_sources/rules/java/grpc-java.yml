@@ -1,0 +1,20 @@
+id: grpc-java-routes
+language: java
+rule:
+  any:
+    - pattern: |
+        class $CLASS extends $SERVICE {
+          $$$BODY
+        }
+    - pattern: |
+        @DgsQuery($$$ARGS)
+        $MODS $RET $METHOD($$$PARAMS) {
+          $$$BODY
+        }
+    - pattern: |
+        @DgsMutation($$$ARGS)
+        $MODS $RET $METHOD($$$PARAMS) {
+          $$$BODY
+        }
+message: gRPC Java or GraphQL service found
+severity: info

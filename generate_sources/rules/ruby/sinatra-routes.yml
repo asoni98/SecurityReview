@@ -1,0 +1,30 @@
+id: sinatra-routes
+language: ruby
+rule:
+  any:
+    - pattern: |
+        get $PATH do
+          $$$BODY
+        end
+    - pattern: |
+        post $PATH do
+          $$$BODY
+        end
+    - pattern: |
+        put $PATH do
+          $$$BODY
+        end
+    - pattern: |
+        patch $PATH do
+          $$$BODY
+        end
+    - pattern: |
+        delete $PATH do
+          $$$BODY
+        end
+    - pattern: |
+        options $PATH do
+          $$$BODY
+        end
+message: Sinatra route handler found
+severity: info

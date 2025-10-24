@@ -1,0 +1,17 @@
+id: echo-routes
+language: go
+rule:
+  any:
+    - pattern: $ECHO.GET($PATH, $HANDLER)
+    - pattern: $ECHO.POST($PATH, $HANDLER)
+    - pattern: $ECHO.PUT($PATH, $HANDLER)
+    - pattern: $ECHO.PATCH($PATH, $HANDLER)
+    - pattern: $ECHO.DELETE($PATH, $HANDLER)
+    - pattern: $GROUP.GET($PATH, $HANDLER)
+    - pattern: $GROUP.POST($PATH, $HANDLER)
+    - pattern: |
+        func $FUNC(c echo.Context) error {
+          $$$BODY
+        }
+message: Echo framework route handler found
+severity: info

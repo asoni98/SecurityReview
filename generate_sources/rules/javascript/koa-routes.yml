@@ -1,0 +1,59 @@
+id: koa-routes
+language: javascript
+rule:
+  any:
+    # Koa router with inline handlers
+    - pattern: |
+        $ROUTER.get($PATH, async ($$$PARAMS) => {
+          $$$BODY
+        })
+    - pattern: |
+        $ROUTER.post($PATH, async ($$$PARAMS) => {
+          $$$BODY
+        })
+    - pattern: |
+        $ROUTER.put($PATH, async ($$$PARAMS) => {
+          $$$BODY
+        })
+    - pattern: |
+        $ROUTER.patch($PATH, async ($$$PARAMS) => {
+          $$$BODY
+        })
+    - pattern: |
+        $ROUTER.delete($PATH, async ($$$PARAMS) => {
+          $$$BODY
+        })
+    - pattern: |
+        $ROUTER.del($PATH, async ($$$PARAMS) => {
+          $$$BODY
+        })
+    # Non-async handlers
+    - pattern: |
+        $ROUTER.get($PATH, ($$$PARAMS) => {
+          $$$BODY
+        })
+    - pattern: |
+        $ROUTER.post($PATH, ($$$PARAMS) => {
+          $$$BODY
+        })
+    - pattern: |
+        $ROUTER.put($PATH, ($$$PARAMS) => {
+          $$$BODY
+        })
+    - pattern: |
+        $ROUTER.delete($PATH, ($$$PARAMS) => {
+          $$$BODY
+        })
+    # Function-style handlers
+    - pattern: |
+        $ROUTER.get($PATH, async function($$$PARAMS) {
+          $$$BODY
+        })
+    - pattern: |
+        $ROUTER.post($PATH, async function($$$PARAMS) {
+          $$$BODY
+        })
+    # Koa router creation
+    - pattern: new Router()
+message: Koa router route handler found
+severity: info

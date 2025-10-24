@@ -1,0 +1,36 @@
+id: nestjs-routes
+language: typescript
+rule:
+  any:
+    - pattern: |
+        @Controller($$$ARGS)
+        class $CLASS {
+          $$$BODY
+        }
+    - pattern: |
+        @Get($$$ARGS)
+        $FUNC($$$PARAMS) {
+          $$$BODY
+        }
+    - pattern: |
+        @Post($$$ARGS)
+        $FUNC($$$PARAMS) {
+          $$$BODY
+        }
+    - pattern: |
+        @Put($$$ARGS)
+        $FUNC($$$PARAMS) {
+          $$$BODY
+        }
+    - pattern: |
+        @Patch($$$ARGS)
+        $FUNC($$$PARAMS) {
+          $$$BODY
+        }
+    - pattern: |
+        @Delete($$$ARGS)
+        $FUNC($$$PARAMS) {
+          $$$BODY
+        }
+message: NestJS route handler found
+severity: info

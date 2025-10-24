@@ -1,0 +1,26 @@
+id: rails-routes
+language: ruby
+rule:
+  any:
+    - pattern: |
+        get $PATH, to: $CONTROLLER
+    - pattern: |
+        post $PATH, to: $CONTROLLER
+    - pattern: |
+        put $PATH, to: $CONTROLLER
+    - pattern: |
+        patch $PATH, to: $CONTROLLER
+    - pattern: |
+        delete $PATH, to: $CONTROLLER
+    - pattern: |
+        match $PATH, $$$ARGS
+    - pattern: |
+        resources $RESOURCE, $$$ARGS
+    - pattern: |
+        resource $RESOURCE, $$$ARGS
+    - pattern: |
+        namespace $NAME do
+          $$$BODY
+        end
+message: Rails route definition found
+severity: info

@@ -1,0 +1,28 @@
+id: django-routes
+language: python
+rule:
+  any:
+    - pattern: path($PATH, $VIEW, $$$ARGS)
+    - pattern: re_path($PATTERN, $VIEW, $$$ARGS)
+    - pattern: |
+        class $CLASS($$$BASES):
+            def get(self, request, $$$PARAMS):
+                $$$BODY
+    - pattern: |
+        class $CLASS($$$BASES):
+            def post(self, request, $$$PARAMS):
+                $$$BODY
+    - pattern: |
+        class $CLASS($$$BASES):
+            def put(self, request, $$$PARAMS):
+                $$$BODY
+    - pattern: |
+        class $CLASS($$$BASES):
+            def patch(self, request, $$$PARAMS):
+                $$$BODY
+    - pattern: |
+        class $CLASS($$$BASES):
+            def delete(self, request, $$$PARAMS):
+                $$$BODY
+message: Django URL pattern or view method found
+severity: info

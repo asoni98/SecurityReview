@@ -1,0 +1,63 @@
+id: fastify-routes
+language: javascript
+rule:
+  any:
+    # Routes with inline handler functions
+    - pattern: |
+        $FASTIFY.get($PATH, async function($$$PARAMS) {
+          $$$BODY
+        })
+    - pattern: |
+        $FASTIFY.post($PATH, async function($$$PARAMS) {
+          $$$BODY
+        })
+    - pattern: |
+        $FASTIFY.put($PATH, async function($$$PARAMS) {
+          $$$BODY
+        })
+    - pattern: |
+        $FASTIFY.patch($PATH, async function($$$PARAMS) {
+          $$$BODY
+        })
+    - pattern: |
+        $FASTIFY.delete($PATH, async function($$$PARAMS) {
+          $$$BODY
+        })
+    # Async arrow function handlers
+    - pattern: |
+        $FASTIFY.get($PATH, async ($$$PARAMS) => {
+          $$$BODY
+        })
+    - pattern: |
+        $FASTIFY.post($PATH, async ($$$PARAMS) => {
+          $$$BODY
+        })
+    - pattern: |
+        $FASTIFY.put($PATH, async ($$$PARAMS) => {
+          $$$BODY
+        })
+    - pattern: |
+        $FASTIFY.patch($PATH, async ($$$PARAMS) => {
+          $$$BODY
+        })
+    - pattern: |
+        $FASTIFY.delete($PATH, async ($$$PARAMS) => {
+          $$$BODY
+        })
+    # Route object definition
+    - pattern: |
+        $FASTIFY.route({
+          method: $METHOD,
+          url: $PATH,
+          handler: $HANDLER
+        })
+    - pattern: |
+        $FASTIFY.route({
+          method: $METHOD,
+          url: $PATH,
+          handler: async $HANDLER {
+            $$$BODY
+          }
+        })
+message: Fastify route handler found
+severity: info

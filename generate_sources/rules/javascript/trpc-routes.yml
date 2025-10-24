@@ -1,0 +1,20 @@
+id: trpc-routes
+language: typescript
+rule:
+  any:
+    - pattern: $ROUTER.query($NAME, $$$ARGS)
+    - pattern: $ROUTER.mutation($NAME, $$$ARGS)
+    - pattern: |
+        .query($NAME, {
+          $$$BODY
+        })
+    - pattern: |
+        .mutation($NAME, {
+          $$$BODY
+        })
+    - pattern: |
+        export const $ROUTER = $T.router({
+          $$$BODY
+        })
+message: tRPC procedure found
+severity: info

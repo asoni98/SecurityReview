@@ -1,0 +1,9 @@
+id: grpc-python-routes
+language: python
+rule:
+  pattern: |
+    class $CLASS($$$BASES):
+        def $METHOD(self, request, context):
+            $$$BODY
+message: gRPC Python servicer method found
+severity: info

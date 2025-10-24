@@ -1,0 +1,14 @@
+id: grpc-go-routes
+language: go
+rule:
+  any:
+    - pattern: |
+        func ($RECV *$SERVER) $METHOD(ctx context.Context, req $REQ) ($RES, error) {
+          $$$BODY
+        }
+    - pattern: |
+        func ($RECV *$SERVER) $METHOD(stream $STREAM) error {
+          $$$BODY
+        }
+message: gRPC Go service method found
+severity: info

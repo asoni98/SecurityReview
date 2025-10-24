@@ -1,0 +1,43 @@
+id: apollo-graphql-routes
+language: typescript
+rule:
+  any:
+    # Generic ResolverContext pattern
+    - pattern: |
+        function $RESOLVER($PARENT: $PTYPE, $ARGS: $ATYPE, $CONTEXT: ResolverContext) {
+          $$$BODY
+        }
+
+    # Match any *Context type (catches custom context types)
+    - pattern: |
+        function $RESOLVER($PARENT: $PTYPE, $ARGS: $ATYPE, $CONTEXT: $CTYPEContext) {
+          $$$BODY
+        }
+
+    # Resolver objects with typed declarations
+    - pattern: |
+        const $NAME: $TYPEResolvers = {
+          $$$RESOLVERS
+        }
+
+    - pattern: |
+        const $NAME: Resolvers = {
+          $$$RESOLVERS
+        }
+
+    # Standard resolver exports
+    - pattern: |
+        const resolvers = {
+          $$$BODY
+        }
+
+    - pattern: |
+        export const resolvers = {
+          $$$BODY
+        }
+
+    - pattern: |
+        export default $RESOLVERS
+
+message: GraphQL resolver found
+severity: info
