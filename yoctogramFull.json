@@ -1,0 +1,668 @@
+{
+  "total_functions_analyzed": 17,
+  "high_priority_count": 10,
+  "findings": [
+    {
+      "function_name": "auth_register",
+      "location": {
+        "file_path": "/Users/arunsoni/SecurityReview/yoctogram-app-main/app/api/v1/endpoints/auth.py",
+        "line_number": 19,
+        "column": null,
+        "snippet": null
+      },
+      "framework": "Fastapi",
+      "language": "python",
+      "input_sources": [
+        "http_body"
+      ],
+      "accepts_unauthenticated_input": true,
+      "risk_level": "critical",
+      "security_concerns": [
+        {
+          "vulnerability_type": "mass_assignment",
+          "description": "User-supplied fields are expanded directly into the ORM model via User(**user.model_dump(exclude={\"password\"})). If the Pydantic schema/User model includes privileged fields (e.g., is_admin, role), this could allow setting sensitive attributes during registration.",
+          "confidence": 0.6
+        },
+        {
+          "vulnerability_type": "business_logic",
+          "description": "Unauthenticated account creation performs DB writes. Consider rate limiting, email/username uniqueness enforced at the DB level to avoid race conditions, and potential signup abuse controls.",
+          "confidence": 0.6
+        }
+      ],
+      "endpoint_path": "/register/",
+      "http_methods": [
+        "POST"
+      ],
+      "has_input_validation": true,
+      "has_sanitization": null,
+      "has_authorization_check": false,
+      "reasoning": "This is a real FastAPI route handler defined with @router.post(\"/register/\"). It accepts unauthenticated HTTP request body data parsed into a Pydantic model (UserCreate). It uses that input to query the database for existing users and then writes a new User record after hashing the password. Because it is unauthenticated and performs sensitive database write operations (user creation), it should be triaged as CRITICAL. Reviewers should focus on the exact fields accepted in UserCreate and mapped into the User ORM (mass assignment risk), password hashing configuration, uniqueness constraints/race conditions, and general signup abuse protections."
+    },
+    {
+      "function_name": "auth_login",
+      "location": {
+        "file_path": "/Users/arunsoni/SecurityReview/yoctogram-app-main/app/api/v1/endpoints/auth.py",
+        "line_number": 60,
+        "column": null,
+        "snippet": "@router.post(\"/login/\", response_model=Token)\nasync def auth_login(\n    user: UserLogin, db: AsyncDBSession = Depends(deps.get_db)\n) -> Token:\n    try:\n        await logger.ainfo(\"Login attempt\", username=user.username)\n        db_user = (\n            await db.scalars(select(User).where(User.username == user.username))\n        ).first()\n        if not db_user or not verify_password(user.password, db_user.password_hash):\n            await logger.ainfo(\"Login failed\", username=user.username)\n            return JSONResponse(\n                content={\"success\": False, \"detail\": \"Invalid username or password\"},\n                status_code=401,\n            )\n\n        await logger.ainfo(\"Login successful\", username=user.username)\n        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)\n        access_token = create_access_token(\n            str(db_user.id), expires_delta=access_token_expires\n        )\n\n        return Token(access_token=access_token, token_type=\"bearer\")\n    except Exception as e:\n        await logger.aexception(\"Exception during login\", username=user.username)\n        return JSONResponse(\n            {\n                \"success\": False,\n                \"detail\": str(e) if settings.DEBUG else \"Internal server error\",\n            },"
+      },
+      "framework": "Fastapi",
+      "language": "python",
+      "input_sources": [
+        "http_body"
+      ],
+      "accepts_unauthenticated_input": true,
+      "risk_level": "high",
+      "security_concerns": [
+        {
+          "vulnerability_type": "business_logic",
+          "description": "Authentication flow and token issuance are security-critical. Verify password checking is constant-time and robust, JWT creation uses a strong secret/algorithm, and token expiration/claims are correct. Ensure errors do not enable user enumeration.",
+          "confidence": 0.78
+        },
+        {
+          "vulnerability_type": "other",
+          "description": "Brute-force protection/rate limiting and account lockout are not evident. Logging of usernames and exception details could aid attackers if verbose in production.",
+          "confidence": 0.7
+        },
+        {
+          "vulnerability_type": "sql_injection",
+          "description": "User-controlled username is used in a DB query. It appears to use SQLAlchemy query construction which should parameterize inputs, but confirm no raw SQL is involved in deps.get_db configuration.",
+          "confidence": 0.4
+        }
+      ],
+      "endpoint_path": "/login/",
+      "http_methods": [
+        "POST"
+      ],
+      "has_input_validation": true,
+      "has_sanitization": null,
+      "has_authorization_check": false,
+      "reasoning": "This is a real FastAPI route handler that accepts unauthenticated JSON body credentials and performs DB lookups, password verification, and JWT/token issuance. While it performs only read queries, it handles highly sensitive authentication logic and returns access tokens. That elevates the triage priority to HIGH for a focused security review. Reviewers should scrutinize credential handling, token creation, error messages, logging, and any rate-limiting controls."
+    },
+    {
+      "function_name": "feed_latest",
+      "location": {
+        "file_path": "/Users/arunsoni/SecurityReview/yoctogram-app-main/app/api/v1/endpoints/feed.py",
+        "line_number": 22,
+        "column": null,
+        "snippet": "@router.get(\"/latest\")\nasync def feed_latest(\n    before: datetime = datetime.now(tz=timezone.utc) + timedelta(days=1),\n    after: datetime = datetime.fromtimestamp(0, tz=timezone.utc),\n    user: UserDetail | None = Depends(deps.verify_jwt_to_uuid_or_none),\n    db: AsyncDBSession = Depends(deps.get_db),\n    aws: AWSSession = Depends(deps.get_aws_session),\n    redis: Redis = Depends(deps.get_redis),\n) -> Response:\n    try:\n        before = before.astimezone(timezone.utc).replace(tzinfo=None)\n        after = after.astimezone(timezone.utc).replace(tzinfo=None)\n\n        image_filters = [\n            Image.created_at < before,\n            Image.created_at > after,\n            Image.public,\n        ]\n\n        if user is not None:\n            image_filters[-1] = or_(Image.public, Image.owner_id == user.id)\n\n        return JSONResponse(await build_feed(image_filters, db, aws, redis))\n    except Exception as e:\n        await logger.aexception(\"Error building latest feed\", user=user.id)\n        return JSONResponse(\n            {\n                \"success\": False,\n                \"detail\": str(e) if settings.DEBUG else \"Internal server error\",\n            },"
+      },
+      "framework": "Fastapi",
+      "language": "python",
+      "input_sources": [
+        "query_params",
+        "http_headers"
+      ],
+      "accepts_unauthenticated_input": true,
+      "risk_level": "high",
+      "security_concerns": [
+        {
+          "vulnerability_type": "idor",
+          "description": "Authorization is optional; authenticated users see additional (non-public) items via owner_id filter. Any flaw in JWT verification or filter construction could expose private images. Verify build_feed and deps.verify_jwt_to_uuid_or_none enforce correct per-user access.",
+          "confidence": 0.7
+        },
+        {
+          "vulnerability_type": "business_logic",
+          "description": "before/after query parameters directly control time-window filters and could lead to very large result sets or expensive queries (potential DoS) if not rate-limited or paginated.",
+          "confidence": 0.6
+        }
+      ],
+      "endpoint_path": "/latest",
+      "http_methods": [
+        "GET"
+      ],
+      "has_input_validation": true,
+      "has_sanitization": null,
+      "has_authorization_check": true,
+      "reasoning": "This is a real FastAPI GET endpoint at /latest. It accepts unauthenticated requests and takes user-controlled query params (before, after) and optionally an Authorization header (JWT) via dependency. It uses the inputs to assemble SQLAlchemy filters and then calls build_feed with a DB session, AWS session, and Redis client—implying database reads and external service interactions. Because it is unauthenticated but performs non-trivial read operations and conditionally includes private content based on user identity, it warrants a HIGH priority review focusing on authorization logic and potential data exposure, as well as performance implications of user-controlled time ranges."
+    },
+    {
+      "function_name": "feed_by_user",
+      "location": {
+        "file_path": "/Users/arunsoni/SecurityReview/yoctogram-app-main/app/api/v1/endpoints/feed.py",
+        "line_number": 56,
+        "column": null,
+        "snippet": "@router.get(\"/by_user/{creator}\")\nasync def feed_by_user(\n    creator: uuid.UUID,\n    before: datetime = datetime.now(tz=timezone.utc) + timedelta(days=1),\n    after: datetime = datetime.fromtimestamp(0, tz=timezone.utc),\n    user: UserDetail | None = Depends(deps.verify_jwt_to_uuid_or_none),\n    db: AsyncDBSession = Depends(deps.get_db),\n    aws: Optional[AWSSession] = Depends(deps.get_aws_session),\n    redis: Redis = Depends(deps.get_redis),\n) -> Response:"
+      },
+      "framework": "Fastapi",
+      "language": "python",
+      "input_sources": [
+        "path_params",
+        "query_params",
+        "http_headers"
+      ],
+      "accepts_unauthenticated_input": true,
+      "risk_level": "high",
+      "security_concerns": [
+        {
+          "vulnerability_type": "authorization_bypass",
+          "description": "Authorization is implemented via query filters (owner/public). Because authentication is optional, ensure the logic reliably prevents access to non-public images for non-owners, and that user=None cases do not degrade the checks.",
+          "confidence": 0.7
+        },
+        {
+          "vulnerability_type": "idor",
+          "description": "Endpoint returns resources scoped by a path-supplied creator UUID. Verify that only public items are returned to non-owners and that owners can only see their own private items, avoiding indirect object reference issues.",
+          "confidence": 0.6
+        },
+        {
+          "vulnerability_type": "other",
+          "description": "Potential for excessive data exposure or DoS if before/after parameters are abused (very wide ranges, no pagination/limits). Confirm build_feed applies limits/sorting/caching safely.",
+          "confidence": 0.5
+        }
+      ],
+      "endpoint_path": "/by_user/{creator}",
+      "http_methods": [
+        "GET"
+      ],
+      "has_input_validation": true,
+      "has_sanitization": null,
+      "has_authorization_check": true,
+      "reasoning": "This is a real FastAPI route handler that accepts unauthenticated requests (user comes from verify_jwt_to_uuid_or_none). It takes user-controlled inputs via the path param creator and query params before/after, and likely the Authorization header. It uses those values to construct SQLAlchemy filters for database queries and passes dependencies for AWS and Redis to build_feed, implying external service interactions and caching. Although read-only, the logic is non-trivial and governs access to potentially private resources; unauthenticated users can hit it. Per rubric, unauthenticated read with complex authorization logic merits HIGH priority. Reviewers should scrutinize the authorization/filter logic, handling of user=None, correctness of public vs owner scoping, and any limits/pagination/validation applied in build_feed."
+    },
+    {
+      "function_name": "images_generate_upload_link",
+      "location": {
+        "file_path": "/Users/arunsoni/SecurityReview/yoctogram-app-main/app/api/v1/endpoints/images.py",
+        "line_number": 21,
+        "column": null,
+        "snippet": "@router.post(\"/upload/{privacy}/generate\")\nasync def images_generate_upload_link(\n    privacy: str,\n    caption: str = \"\",\n    user: UserDetail = Depends(deps.get_current_user),\n    db: AsyncDBSession = Depends(deps.get_db),\n    aws: AWSSession = Depends(deps.get_aws_session),\n) -> Response:\n    if privacy not in [\"public\", \"private\"]:\n        return JSONResponse(\n            content={\n                \"success\": False,\n                \"detail\": \"privacy parameter should be 'public' or 'private'\",\n            },\n            status_code=400,\n        )\n\n    public = privacy == \"public\"\n    image_id = str(ULID().to_uuid4())\n    db_image = Image(\n        id=image_id,\n        public=public,\n        caption=caption,\n        owner_id=user.id,\n        content_type=\"image/jpeg\",\n    )\n\n    presigned_post = create_presigned_post(aws, image_id)\n    db_image.path = presigned_post[\"s3_uri\"]\n    create_response = presigned_post[\"create_response\"] | {\"id\": image_id}\n"
+      },
+      "framework": "Fastapi",
+      "language": "python",
+      "input_sources": [
+        "path_params",
+        "query_params"
+      ],
+      "accepts_unauthenticated_input": false,
+      "risk_level": "high",
+      "security_concerns": [
+        {
+          "vulnerability_type": "other",
+          "description": "Generates S3 presigned upload credentials. Ensure the policy strictly constrains bucket, key (image_id), content-type, and max size to prevent arbitrary/oversized uploads or key overwrites.",
+          "confidence": 0.8
+        },
+        {
+          "vulnerability_type": "xss",
+          "description": "caption is user-controlled and stored; verify downstream rendering properly escapes/encodes to avoid stored XSS.",
+          "confidence": 0.5
+        },
+        {
+          "vulnerability_type": "business_logic",
+          "description": "Flow appears to create a DB image record and rely on later upload; ensure DB writes/visibility are conditioned on successful S3 upload (verify_exists) and that public/private semantics are enforced everywhere.",
+          "confidence": 0.6
+        }
+      ],
+      "endpoint_path": "/upload/{privacy}/generate",
+      "http_methods": [
+        "POST"
+      ],
+      "has_input_validation": true,
+      "has_sanitization": false,
+      "has_authorization_check": true,
+      "reasoning": "This is a real FastAPI route handler that accepts user input via a path param (privacy) and a query param (caption). It depends on get_current_user, indicating authentication is required. It performs sensitive operations: generates presigned S3 upload data and creates a database model instance referencing the upload path; likely persists it. Although authenticated, generating upload credentials and creating DB records are sensitive, so prioritize as HIGH. Reviewers should focus on S3 presign policy restrictions, DB write conditions tied to successful uploads, and handling of user-provided caption if later rendered."
+    },
+    {
+      "function_name": "images_retrieve",
+      "location": {
+        "file_path": "/Users/arunsoni/SecurityReview/yoctogram-app-main/app/api/v1/endpoints/images.py",
+        "line_number": 93,
+        "column": null,
+        "snippet": "@router.get(\"/media/{image_id}\")\nasync def images_retrieve(\n    image_id: UUID4,\n    user: UserDetail | None = Depends(deps.verify_jwt_to_uuid_or_none),\n    db: AsyncDBSession = Depends(deps.get_db),\n    aws: AWSSession = Depends(deps.get_aws_session),\n    redis: Redis = Depends(deps.get_redis),\n) -> Response:\n    try:\n        user_id = user.id if user is not None else None\n        db_image = await get_image(db, image_id, user_id)\n        if not db_image:\n            return JSONResponse(\n                {\"success\": False, \"detail\": \"Image not found\"}, status_code=404\n            )\n\n        return JSONResponse(\n            {\n                \"success\": True,\n                \"uri\": await presigned_url_with_cache(\n                    aws, redis, db_image.path, db_image.content_type\n                ),\n            }\n        )\n\n    except Exception as e:\n        await logger.aexception(\"Error retrieving image\", image=image_id, user=user_id)\n        return JSONResponse({\"success\": False}, status_code=500)"
+      },
+      "framework": "Fastapi",
+      "language": "python",
+      "input_sources": [
+        "path_params",
+        "http_headers"
+      ],
+      "accepts_unauthenticated_input": true,
+      "risk_level": "high",
+      "security_concerns": [
+        {
+          "vulnerability_type": "authorization_bypass",
+          "description": "Endpoint allows unauthenticated access and relies on get_image to enforce access control. If get_image is insufficient, private images may be exposed.",
+          "confidence": 0.7
+        },
+        {
+          "vulnerability_type": "idor",
+          "description": "If image_id is guessable and get_image does not strictly validate ownership/visibility, an attacker could enumerate UUIDs and obtain presigned URLs.",
+          "confidence": 0.65
+        },
+        {
+          "vulnerability_type": "business_logic",
+          "description": "Presigned URL generation and Redis caching logic could inadvertently extend access or leak resources if cache keys/policies are mis-scoped to user or visibility.",
+          "confidence": 0.6
+        }
+      ],
+      "endpoint_path": "/media/{image_id}",
+      "http_methods": [
+        "GET"
+      ],
+      "has_input_validation": true,
+      "has_sanitization": null,
+      "has_authorization_check": true,
+      "reasoning": "This is a real FastAPI route handler. It accepts a path parameter image_id and optionally an Authorization header processed by verify_jwt_to_uuid_or_none, meaning unauthenticated users can reach it. It performs DB reads via get_image and generates an S3 presigned URL with Redis caching, then returns JSON. Because it is reachable without authentication and involves non-trivial logic and potential data exposure (presigned URL creation), it warrants a HIGH priority review. Focus on how get_image authorizes access based on user_id, whether private images are protected, and whether presigned_url_with_cache and caching scope prevent leakage."
+    },
+    {
+      "function_name": "images_get_likes",
+      "location": {
+        "file_path": "/Users/arunsoni/SecurityReview/yoctogram-app-main/app/api/v1/endpoints/social.py",
+        "line_number": 97,
+        "column": null,
+        "snippet": "@router.get(\"/{image_id}/likes\")\nasync def images_get_likes(\n    image_id: UUID4,\n    user: UserDetail | None = Depends(deps.verify_jwt_to_uuid_or_none),\n    db: AsyncDBSession = Depends(deps.get_db),\n) -> Response:\n    db_image = await get_image(db, image_id, user.id)\n    if not db_image:\n        return JSONResponse(\n            {\"success\": False, \"detail\": \"Image not found\"}, status_code=404\n        )\n\n    liking_users = [\n        {\n            \"id\": str(like.user_id),\n            \"username\": (await like.awaitable_attrs.user).username,\n        }\n        for like in await db_image.awaitable_attrs.likes\n    ]\n\n    return JSONResponse({\"success\": True, \"likes\": liking_users})"
+      },
+      "framework": "Fastapi",
+      "language": "python",
+      "input_sources": [
+        "path_params",
+        "http_headers"
+      ],
+      "accepts_unauthenticated_input": true,
+      "risk_level": "high",
+      "security_concerns": [
+        {
+          "vulnerability_type": "idor",
+          "description": "Endpoint is accessible without authentication (verify_jwt_to_uuid_or_none allows None) and fetches image and its like relationships based on image_id and user context. If get_image does not enforce access control correctly when user is None, it may disclose likes for private/non-public images (Insecure Direct Object Reference).",
+          "confidence": 0.72
+        },
+        {
+          "vulnerability_type": "business_logic",
+          "description": "Authorization appears to be delegated to get_image via user.id. Behavior when user is None is unclear; improper handling could bypass visibility rules or raise exceptions. Verify visibility logic and error handling for unauthenticated callers.",
+          "confidence": 0.6
+        }
+      ],
+      "endpoint_path": "/{image_id}/likes",
+      "http_methods": [
+        "GET"
+      ],
+      "has_input_validation": true,
+      "has_sanitization": null,
+      "has_authorization_check": null,
+      "reasoning": "This is a real FastAPI route handler. It accepts a path parameter image_id (validated as UUID4) and optionally an auth header (JWT) but allows unauthenticated access. It performs database reads by loading the image and its likes and returns a list of users who liked the image. Because it’s unauthenticated and depends on downstream authorization logic to protect potentially sensitive resources, it warrants a high-priority review focusing on authorization/IDOR risks and data exposure, even though operations are read-only."
+    },
+    {
+      "function_name": "images_comment",
+      "location": {
+        "file_path": "/Users/arunsoni/SecurityReview/yoctogram-app-main/app/api/v1/endpoints/social.py",
+        "line_number": 124,
+        "column": null,
+        "snippet": "@router.post(\"/{image_id}/comment\")\nasync def images_comment(\n    image_id: UUID4,\n    comment: CommentCreate,\n    user: UserDetail = Depends(deps.get_current_user),\n    db: AsyncDBSession = Depends(deps.get_db),\n) -> Response:\n    db_image = await get_image(db, image_id, user.id)\n    if not db_image:\n        return JSONResponse(\n            {\"success\": False, \"detail\": \"Image not found\"}, status_code=404\n        )\n\n    (await db_image.awaitable_attrs.comments).append(\n        Comment(\n            id=ULID().to_uuid4(),\n            user_id=user.id,\n            image_id=image_id,\n            content=comment.content,\n        )\n    )\n    await db.commit()\n    await db.refresh(db_image)\n\n    return JSONResponse({\"success\": True})"
+      },
+      "framework": "Fastapi",
+      "language": "python",
+      "input_sources": [
+        "http_body",
+        "path_params",
+        "http_headers"
+      ],
+      "accepts_unauthenticated_input": false,
+      "risk_level": "high",
+      "security_concerns": [
+        {
+          "vulnerability_type": "authorization_bypass",
+          "description": "Authorization depends on get_image(db, image_id, user.id). Verify policy is correct (e.g., should non-owners be allowed to comment? Does this prevent commenting on others' images, or allow unintended access?).",
+          "confidence": 0.6
+        },
+        {
+          "vulnerability_type": "xss",
+          "description": "User-controlled comment.content is stored in the database without sanitization here. If later rendered into HTML without escaping, this could enable stored XSS.",
+          "confidence": 0.55
+        },
+        {
+          "vulnerability_type": "business_logic",
+          "description": "Creation of comments tied to image ownership may be unintended, causing logic/permission issues. Confirm intended comment permissions and whether rate limiting or content rules are required.",
+          "confidence": 0.6
+        }
+      ],
+      "endpoint_path": "/{image_id}/comment",
+      "http_methods": [
+        "POST"
+      ],
+      "has_input_validation": true,
+      "has_sanitization": false,
+      "has_authorization_check": true,
+      "reasoning": "1) This is a real FastAPI route handler registered via @router.post, not config or tests. 2) Accepts path param image_id (UUID4), request body CommentCreate (comment.content), and relies on auth headers via get_current_user. 3) Authentication is required via Depends(deps.get_current_user). 4) Uses user input to perform database write operations: fetch image by id and current user, append a new Comment with user-provided content, commit and refresh. 5) Prioritized as HIGH because it is authenticated but performs sensitive DB write operations and handles user-controlled text content. 6) Next reviewer should examine: - Body field comment.content (length, encoding, HTML/scripts) for potential stored XSS when rendered elsewhere. - Path param image_id authorization: confirm get_image enforces correct access (who is allowed to comment) and prevents IDOR. - DB interaction for proper transaction handling and error cases. - Validation constraints on CommentCreate (e.g., max length) and any sanitization/escaping strategy at render time. Also note there is a sibling POST /{image_id}/comments/{comment_id}/update handler below that modifies existing comments and should be reviewed together for authorization consistency."
+    },
+    {
+      "function_name": "images_comment",
+      "location": {
+        "file_path": "/Users/arunsoni/SecurityReview/yoctogram-app-main/app/api/v1/endpoints/social.py",
+        "line_number": 152,
+        "column": null,
+        "snippet": "@router.post(\"/{image_id}/comments/{comment_id}/update\")\nasync def images_comment(\n    image_id: UUID4,\n    comment_id: UUID4,\n    comment: CommentCreate,\n    user: UserDetail = Depends(deps.get_current_user),\n    db: AsyncDBSession = Depends(deps.get_db),\n) -> Response:\n    db_image = await get_image(db, image_id, user.id)\n    if not db_image:\n        return JSONResponse(\n            {\"success\": False, \"detail\": \"Image not found\"}, status_code=404\n        )\n\n    for db_comment in await db_image.awaitable_attrs.comments:\n        if db_comment.id == comment_id:\n            db_comment.content = comment.content\n            await db.commit()\n            await db.refresh(db_image)\n            break\n    else:\n        return JSONResponse(\n            {\"success\": False, \"detail\": \"Comment not found\"}, status_code=404\n        )\n\n    return JSONResponse({\"success\": True})"
+      },
+      "framework": "Fastapi",
+      "language": "python",
+      "input_sources": [
+        "path_params",
+        "http_body"
+      ],
+      "accepts_unauthenticated_input": false,
+      "risk_level": "high",
+      "security_concerns": [
+        {
+          "vulnerability_type": "authorization_bypass",
+          "description": "Only verifies the image belongs to the current user via get_image(db, image_id, user.id). It does not check whether the current user is allowed to modify the specific comment (e.g., comment owner vs. image owner). Confirm business rules and that get_image properly enforces authorization to prevent IDOR-style modifications.",
+          "confidence": 0.7
+        },
+        {
+          "vulnerability_type": "xss",
+          "description": "User-supplied comment.content is written to the database without sanitization. If later rendered into HTML without proper escaping, it could enable stored XSS.",
+          "confidence": 0.5
+        }
+      ],
+      "endpoint_path": "/{image_id}/comments/{comment_id}/update",
+      "http_methods": [
+        "POST"
+      ],
+      "has_input_validation": true,
+      "has_sanitization": false,
+      "has_authorization_check": true,
+      "reasoning": "1) This is a real FastAPI route handler decorated with @router.post and accepts request data. 2) It takes user input from URL path params (image_id, comment_id) and the HTTP body (CommentCreate with content). 3) It requires authentication via Depends(deps.get_current_user), so unauthenticated users cannot reach it. 4) It uses the inputs to look up an image (authorization scoped by user.id), iterate related comments, update a comment's content, and perform database commit/refresh—i.e., DB write operations. 5) Priority set to HIGH because it is authenticated but performs sensitive DB modifications; correctness of authorization is critical and improper checks could allow unauthorized comment edits. 6) Next reviewer should focus on: authorization logic (does get_image correctly restrict to permitted users, and should only comment owners or moderators be able to update?); validation/constraints for comment.content (length, allowed HTML, encoding); potential stored XSS in downstream rendering; and any race/consistency issues around comment lookup and commit."
+    },
+    {
+      "function_name": "images_comment",
+      "location": {
+        "file_path": "/Users/arunsoni/SecurityReview/yoctogram-app-main/app/api/v1/endpoints/social.py",
+        "line_number": 179,
+        "column": null,
+        "snippet": "@router.post(\"/{image_id}/comments/{comment_id}/delete\")\nasync def images_comment(\n    image_id: UUID4,\n    comment_id: UUID4,\n    user: UserDetail = Depends(deps.get_current_user),\n    db: AsyncDBSession = Depends(deps.get_db),\n) -> Response:\n    db_image = await get_image(db, image_id, user.id)\n    if not db_image:\n        return JSONResponse(\n            {\"success\": False, \"detail\": \"Image not found\"}, status_code=404\n        )\n\n    for comment in await db_image.awaitable_attrs.comments:\n        if comment.id == comment_id:\n            await db.delete(comment)\n            await db.commit()\n            await db.refresh(db_image)\n            break\n    else:\n        return JSONResponse(\n            {\"success\": False, \"detail\": \"Comment not found\"}, status_code=404\n        )\n\n    return JSONResponse({\"success\": True})"
+      },
+      "framework": "Fastapi",
+      "language": "python",
+      "input_sources": [
+        "path_params",
+        "http_headers"
+      ],
+      "accepts_unauthenticated_input": false,
+      "risk_level": "high",
+      "security_concerns": [
+        {
+          "vulnerability_type": "authorization_bypass",
+          "description": "Deletion is allowed if get_image returns an image; ensure get_image enforces that the requesting user is authorized (e.g., owner/moderator) to delete comments on that image. No explicit check that the user owns the image or authored the comment.",
+          "confidence": 0.65
+        },
+        {
+          "vulnerability_type": "idor",
+          "description": "Path parameters image_id and comment_id control which comment is deleted. If authorization in get_image is insufficient, a user could target resources they should not control.",
+          "confidence": 0.6
+        },
+        {
+          "vulnerability_type": "business_logic",
+          "description": "Endpoint performs a destructive DB operation via iteration over related comments. Reviewer should verify that only comments belonging to the specified image can be deleted and that soft-delete vs hard-delete is intended.",
+          "confidence": 0.5
+        }
+      ],
+      "endpoint_path": "/{image_id}/comments/{comment_id}/delete",
+      "http_methods": [
+        "POST"
+      ],
+      "has_input_validation": true,
+      "has_sanitization": null,
+      "has_authorization_check": true,
+      "reasoning": "This is a real FastAPI route function that accepts user-controlled path parameters (UUID4) and depends on authentication via get_current_user. It performs sensitive operations: database lookup and deletion of a comment, followed by commit. Because it is authenticated and performs a DB write (destructive action), it warrants a HIGH priority review. Key risk is correctness of authorization: the code relies on get_image(db, image_id, user.id) to scope access, but there is no explicit check that the user is permitted to delete the targeted comment. The next reviewer should focus on whether get_image enforces ownership/permissions and that the comment belongs to the image before deletion, as well as any IDOR risks stemming from the path parameters."
+    },
+    {
+      "function_name": "images_confirm_uploaded",
+      "location": {
+        "file_path": "/Users/arunsoni/SecurityReview/yoctogram-app-main/app/api/v1/endpoints/images.py",
+        "line_number": 59,
+        "column": null,
+        "snippet": "@router.post(\"/upload/{image_id}/confirm\")\nasync def images_confirm_uploaded(\n    image_id: UUID4,\n    user: UserDetail = Depends(deps.get_current_user),\n    db: AsyncDBSession = Depends(deps.get_db),\n    aws: AWSSession = Depends(deps.get_aws_session),\n) -> Response:\n    db_image = (await db.scalars(select(Image).where(Image.id == image_id))).first()\n    if (not db_image) or (db_image.owner_id != user.id):\n        return JSONResponse(\n            {\"success\": False, \"detail\": \"Image not found\"}, status_code=404\n        )\n\n    if db_image.uploaded:\n        return JSONResponse(\n            {\"success\": False, \"detail\": \"Image upload already confirmed\"},\n            status_code=404,\n        )\n\n    if not verify_exists(aws, db_image.path):\n        return JSONResponse(\n            {\"success\": False, \"detail\": \"Image with that ID doesn't exist in S3\"},\n            status_code=404,\n        )\n\n    db_image.uploaded = True\n    db.add(db_image)\n    await db.commit()\n    await db.refresh(db_image)"
+      },
+      "framework": "Fastapi",
+      "language": "python",
+      "input_sources": [
+        "path_params",
+        "http_headers",
+        "cookies"
+      ],
+      "accepts_unauthenticated_input": false,
+      "risk_level": "medium",
+      "security_concerns": [
+        {
+          "vulnerability_type": "authorization_bypass",
+          "description": "Relies on ownership check (db_image.owner_id == user.id). If get_current_user or owner check is flawed, this could allow IDOR-style confirmation of another user’s upload.",
+          "confidence": 0.62
+        },
+        {
+          "vulnerability_type": "business_logic",
+          "description": "Endpoint changes image state to uploaded=True. Review idempotency, duplicate submission handling, and potential race conditions between concurrent requests.",
+          "confidence": 0.53
+        },
+        {
+          "vulnerability_type": "other",
+          "description": "Potential TOCTOU between verify_exists S3 check and marking as uploaded; ensure S3 key cannot change or be swapped between check and update.",
+          "confidence": 0.41
+        }
+      ],
+      "endpoint_path": "/upload/{image_id}/confirm",
+      "http_methods": [
+        "POST"
+      ],
+      "has_input_validation": true,
+      "has_sanitization": null,
+      "has_authorization_check": true,
+      "reasoning": "This is a real FastAPI POST endpoint that accepts a path parameter (image_id) and authenticated user context via dependency injection. It performs DB read/write operations and an external S3 existence check based on the provided image_id, then updates the database to mark the image as uploaded. Authentication is required via Depends(deps.get_current_user), and there is an authorization/ownership check before performing the state change. Because it is authenticated and performs standard CRUD state change plus an external service check, it warrants a MEDIUM priority review. Focus on the path param handling, auth/ownership enforcement, and the state transition logic."
+    },
+    {
+      "function_name": "images_like",
+      "location": {
+        "file_path": "/Users/arunsoni/SecurityReview/yoctogram-app-main/app/api/v1/endpoints/social.py",
+        "line_number": 16,
+        "column": null,
+        "snippet": "@router.post(\"/{image_id}/like\")\nasync def images_like(\n    image_id: UUID4,\n    user: UserDetail = Depends(deps.get_current_user),\n    db: AsyncDBSession = Depends(deps.get_db),\n) -> Response:\n    db_image = await get_image(db, image_id, user.id)\n    if not db_image:\n        return JSONResponse(\n            {\"success\": False, \"detail\": \"Image not found\"}, status_code=404\n        )\n\n    if (\n        await db.scalars(\n            select(Like).where(Like.user_id == user.id, Like.image_id == image_id)\n        )\n    ).first():\n        return JSONResponse(\n            {\"success\": False, \"detail\": \"User has already liked this image\"},\n            status_code=400,\n        )\n\n    (await db_image.awaitable_attrs.likes).append(\n        Like(user_id=user.id, image_id=image_id, image=db_image)\n    )\n    await db.commit()\n    await db.refresh(db_image)\n\n    return JSONResponse({\"success\": True})"
+      },
+      "framework": "Fastapi",
+      "language": "python",
+      "input_sources": [
+        "path_params",
+        "http_headers"
+      ],
+      "accepts_unauthenticated_input": false,
+      "risk_level": "medium",
+      "security_concerns": [
+        {
+          "vulnerability_type": "idor",
+          "description": "The endpoint operates on a user-supplied image_id. Correct authorization depends on get_image(db, image_id, user.id) enforcing access rules. If get_image does not validate visibility/ownership, a user may like images they should not access.",
+          "confidence": 0.62
+        },
+        {
+          "vulnerability_type": "business_logic",
+          "description": "Duplicate-like prevention is a read-then-write pattern that may be subject to race conditions. Without a database-level unique constraint (user_id, image_id), concurrent requests could insert duplicates.",
+          "confidence": 0.58
+        }
+      ],
+      "endpoint_path": "/{image_id}/like",
+      "http_methods": [
+        "POST"
+      ],
+      "has_input_validation": true,
+      "has_sanitization": null,
+      "has_authorization_check": null,
+      "reasoning": "This is a real FastAPI POST route handling a path parameter image_id and authenticated user from dependency injection. Authentication is required via Depends(deps.get_current_user). The handler reads from and writes to the database: it looks up the image, checks for an existing Like, then appends a new Like and commits. Because it performs authenticated CRUD with DB writes (but not highly sensitive operations), the triage priority is MEDIUM. Reviewers should focus on authorization in get_image for potential IDOR and on race conditions/uniqueness guarantees for duplicate likes."
+    },
+    {
+      "function_name": "images_like",
+      "location": {
+        "file_path": "/Users/arunsoni/SecurityReview/yoctogram-app-main/app/api/v1/endpoints/social.py",
+        "line_number": 47,
+        "column": null,
+        "snippet": null
+      },
+      "framework": "Fastapi",
+      "language": "python",
+      "input_sources": [
+        "path_params",
+        "http_headers"
+      ],
+      "accepts_unauthenticated_input": false,
+      "risk_level": "medium",
+      "security_concerns": [
+        {
+          "vulnerability_type": "idor",
+          "description": "Verify get_image(db, image_id, user.id) strictly enforces ownership/visibility so users cannot like/unlike images they should not access.",
+          "confidence": 0.6
+        },
+        {
+          "vulnerability_type": "business_logic",
+          "description": "Race conditions between existence check and insert could allow duplicate likes unless a DB-level unique constraint (user_id,image_id) exists.",
+          "confidence": 0.5
+        }
+      ],
+      "endpoint_path": "/{image_id}/like",
+      "http_methods": [
+        "POST"
+      ],
+      "has_input_validation": true,
+      "has_sanitization": null,
+      "has_authorization_check": true,
+      "reasoning": "This is a real FastAPI route handler that accepts a path parameter (image_id) and authenticated user context via dependency injection. It performs database reads and writes (checking for an existing Like and appending a new Like), then commits the transaction. Authentication is enforced via Depends(deps.get_current_user). Because it is authenticated and performs standard CRUD writes, prioritize as MEDIUM. Review should focus on authorization scoping in get_image and data integrity around duplicate-like prevention."
+    },
+    {
+      "function_name": "images_get_likes",
+      "location": {
+        "file_path": "/Users/arunsoni/SecurityReview/yoctogram-app-main/app/api/v1/endpoints/social.py",
+        "line_number": 74,
+        "column": null,
+        "snippet": "@router.get(\"/{image_id}/likes\")\nasync def images_get_likes(\n    image_id: UUID4,\n    user: UserDetail | None = Depends(deps.verify_jwt_to_uuid_or_none),\n    db: AsyncDBSession = Depends(deps.get_db),\n) -> Response:\n    db_image = await get_image(db, image_id, user.id)\n    if not db_image:\n        return JSONResponse(\n            {\"success\": False, \"detail\": \"Image not found\"}, status_code=404\n        )\n\n    liking_users = [\n        {\n            \"id\": str(like.user_id),\n            \"username\": (await like.awaitable_attrs.user).username,\n        }\n        for like in await db_image.awaitable_attrs.likes\n    ]\n\n    return JSONResponse({\"success\": True, \"likes\": liking_users})"
+      },
+      "framework": "Fastapi",
+      "language": "python",
+      "input_sources": [
+        "path_params",
+        "http_headers"
+      ],
+      "accepts_unauthenticated_input": true,
+      "risk_level": "medium",
+      "security_concerns": [
+        {
+          "vulnerability_type": "authorization_bypass",
+          "description": "Endpoint allows unauthenticated access (optional JWT). It relies on get_image(db, image_id, user.id) for access control. If get_image does not enforce visibility/ownership correctly for unauthenticated users, likes for private or restricted images could be disclosed.",
+          "confidence": 0.6
+        },
+        {
+          "vulnerability_type": "idor",
+          "description": "If image access is not properly constrained to visibility rules, attackers could enumerate image IDs to list liking users for images they should not see.",
+          "confidence": 0.55
+        },
+        {
+          "vulnerability_type": "other",
+          "description": "Potential user enumeration/data exposure risk by returning list of user IDs and usernames to unauthenticated callers. Review business requirements and minimization of returned fields.",
+          "confidence": 0.5
+        }
+      ],
+      "endpoint_path": "/{image_id}/likes",
+      "http_methods": [
+        "GET"
+      ],
+      "has_input_validation": true,
+      "has_sanitization": null,
+      "has_authorization_check": true,
+      "reasoning": "1) This is a real FastAPI route handler using @router.get.\n2) Accepts a path param image_id (UUID4) and optionally an Authorization header (via verify_jwt_to_uuid_or_none). No body for GET.\n3) Authentication is optional; unauthenticated users can reach it, so it accepts unauthenticated input.\n4) It performs database queries: fetches an image by ID (scoped by user id) and aggregates likes/users, then returns them in JSON.\n5) Priority MEDIUM: Unauthenticated read-only endpoint that queries the database and may expose user data. Not a write/critical op, but still important to review for access control and data exposure.\n6) Next reviewer should verify: how get_image enforces access control for unauthenticated users; whether verify_jwt_to_uuid_or_none can return None and how user.id is handled; whether returned fields (user IDs/usernames) are appropriate and minimized; any potential ID enumeration risks and rate limiting; and ensure no N+1 query vulnerabilities lead to DoS under large like counts."
+    },
+    {
+      "function_name": "users_me",
+      "location": {
+        "file_path": "/Users/arunsoni/SecurityReview/yoctogram-app-main/app/api/v1/endpoints/users.py",
+        "line_number": 17,
+        "column": null,
+        "snippet": null
+      },
+      "framework": "FastAPI",
+      "language": "python",
+      "input_sources": [
+        "http_headers"
+      ],
+      "accepts_unauthenticated_input": false,
+      "risk_level": "low",
+      "security_concerns": [
+        {
+          "vulnerability_type": "authorization_bypass",
+          "description": "Relies on Depends(deps.get_current_user) for auth; ensure this dependency correctly validates and enforces authentication and does not allow anonymous or expired tokens.",
+          "confidence": 0.6
+        },
+        {
+          "vulnerability_type": "business_logic",
+          "description": "Returns whatever UserDetail object the dependency provides; ensure no overexposed fields are included in the response model and that the schema enforces least privilege.",
+          "confidence": 0.5
+        }
+      ],
+      "endpoint_path": "/me",
+      "http_methods": [
+        "GET"
+      ],
+      "has_input_validation": true,
+      "has_sanitization": null,
+      "has_authorization_check": true,
+      "reasoning": "This is a real FastAPI route that returns the current authenticated user via a dependency. Input is effectively from HTTP Authorization headers processed by get_current_user. Requires authentication. Performs a simple read operation without DB writes or file access. Prioritize lower as it is an authenticated, simple read."
+    },
+    {
+      "function_name": "api_health_check",
+      "location": {
+        "file_path": "/Users/arunsoni/SecurityReview/yoctogram-app-main/app/api/v1/api.py",
+        "line_number": 7,
+        "column": null,
+        "snippet": "@api_router.get(\"/health\", status_code=status.HTTP_200_OK)\nasync def api_health_check() -> Response:\n    return Response(status_code=status.HTTP_200_OK)"
+      },
+      "framework": "Fastapi",
+      "language": "python",
+      "input_sources": [],
+      "accepts_unauthenticated_input": true,
+      "risk_level": "low",
+      "security_concerns": [],
+      "endpoint_path": "/health",
+      "http_methods": [
+        "GET"
+      ],
+      "has_input_validation": false,
+      "has_sanitization": false,
+      "has_authorization_check": false,
+      "reasoning": "This is a real FastAPI route handler for GET /health. The function takes no parameters and does not read body, query, path, or header values. It simply returns a 200 OK response and performs no database, filesystem, external API, or business-logic operations. No authentication or authorization is applied, so it is publicly reachable, but the operation is trivial and read-only. Given the lack of input handling and absence of sensitive operations, this should be triaged as LOW priority. Next reviewer should only confirm that no global middleware injects sensitive behavior and that no sensitive information is exposed by the health endpoint, but otherwise there is minimal attack surface."
+    },
+    {
+      "function_name": "users_username_from_id",
+      "location": {
+        "file_path": "/Users/arunsoni/SecurityReview/yoctogram-app-main/app/api/v1/endpoints/users.py",
+        "line_number": 23,
+        "column": null,
+        "snippet": "@router.get(\"/profile/{user}\")\nasync def users_username_from_id(\n    user: uuid.UUID, db: AsyncDBSession = Depends(deps.get_db)\n) -> JSONResponse:"
+      },
+      "framework": "Fastapi",
+      "language": "python",
+      "input_sources": [
+        "path_params"
+      ],
+      "accepts_unauthenticated_input": true,
+      "risk_level": "low",
+      "security_concerns": [
+        {
+          "vulnerability_type": "idor",
+          "description": "Endpoint is unauthenticated and returns profile fields (username, bio) for any given user UUID. If these fields are meant to be private, this could be an authorization/IDOR issue. Verify intended visibility of this data.",
+          "confidence": 0.4
+        },
+        {
+          "vulnerability_type": "other",
+          "description": "Error responses include raw exception messages when settings.DEBUG is True, which can leak implementation details.",
+          "confidence": 0.6
+        }
+      ],
+      "endpoint_path": "/profile/{user}",
+      "http_methods": [
+        "GET"
+      ],
+      "has_input_validation": true,
+      "has_sanitization": true,
+      "has_authorization_check": false,
+      "reasoning": "This is a real FastAPI route handler that accepts a path parameter `user` (UUID) without any auth dependency, so it is reachable by unauthenticated users. The handler performs a read-only database lookup using SQLAlchemy ORM and returns limited profile data (username, bio). Input is type-validated by FastAPI (UUID) and the query is parameterized via SQLAlchemy, reducing injection risk. Because it is unauthenticated but only performs a simple read with minimal logic, it is prioritized as LOW. Next review should verify intended access control and potential info disclosure in debug error paths."
+    }
+  ],
+  "summary": "17 real user input handlers were identified (0 false positives). 10 handlers are high priority (1 critical, 9 high) due to unauthenticated sensitive operations, cross-user data exposure, and content-manipulation risks. The single critical item is unauthenticated account registration with indications of potential mass-assignment and business logic gaps. High-risk items cluster around authentication, feed exposure, media retrieval, and social interactions (comments/likes), with themes of IDOR, authorization bypass, stored/reflected XSS, and weak anti-abuse controls.\n\nImmediate review should tackle auth_register and auth_login first, then unauthenticated read endpoints (feed_latest, feed_by_user, images_retrieve, images_get_likes), followed by authenticated media/social mutation endpoints (images_generate_upload_link; images_comment create/update/delete). Reviewers should validate strict allow-listing for model binding, object-level authorization on every data fetch/mutation, robust output encoding for user-generated content, and proper rate limiting/pagination to limit scraping and brute-force risk.",
+  "recommendations": [
+    "Begin with quick threat models per endpoint (data sensitivity, actor, trust boundaries), then deep dive code review with test requests.",
+    "Verify object-level authorization is enforced server-side for every ID-bearing path/body parameter (no client-trust).",
+    "Check input handling: explicit schemas with allow-lists, type/length constraints, and safe ORM usage (no string-concatenated queries).",
+    "Validate output encoding/sanitization for user content (comments/filenames), and ensure tokens/cookies have secure flags and short lifetimes.",
+    "Exercise endpoints with both authenticated and unauthenticated clients, including blocked/private cases, to probe IDOR and authorization bypass."
+  ]
+}

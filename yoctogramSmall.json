@@ -1,0 +1,50 @@
+{
+  "total_functions_analyzed": 17,
+  "high_priority_count": 10,
+  "findings": [
+    {
+      "function_name": "auth_register",
+      "location": {
+        "file_path": "/Users/arunsoni/SecurityReview/yoctogram-app-main/app/api/v1/endpoints/auth.py",
+        "line_number": 19,
+        "column": null,
+        "snippet": null
+      },
+      "framework": "Fastapi",
+      "language": "python",
+      "input_sources": [
+        "http_body"
+      ],
+      "accepts_unauthenticated_input": true,
+      "risk_level": "critical",
+      "security_concerns": [
+        {
+          "vulnerability_type": "mass_assignment",
+          "description": "User-supplied fields are expanded directly into the ORM model via User(**user.model_dump(exclude={\"password\"})). If the Pydantic schema/User model includes privileged fields (e.g., is_admin, role), this could allow setting sensitive attributes during registration.",
+          "confidence": 0.6
+        },
+        {
+          "vulnerability_type": "business_logic",
+          "description": "Unauthenticated account creation performs DB writes. Consider rate limiting, email/username uniqueness enforced at the DB level to avoid race conditions, and potential signup abuse controls.",
+          "confidence": 0.6
+        }
+      ],
+      "endpoint_path": "/register/",
+      "http_methods": [
+        "POST"
+      ],
+      "has_input_validation": true,
+      "has_sanitization": null,
+      "has_authorization_check": false,
+      "reasoning": "This is a real FastAPI route handler defined with @router.post(\"/register/\"). It accepts unauthenticated HTTP request body data parsed into a Pydantic model (UserCreate). It uses that input to query the database for existing users and then writes a new User record after hashing the password. Because it is unauthenticated and performs sensitive database write operations (user creation), it should be triaged as CRITICAL. Reviewers should focus on the exact fields accepted in UserCreate and mapped into the User ORM (mass assignment risk), password hashing configuration, uniqueness constraints/race conditions, and general signup abuse protections."
+    }
+  ],
+  "summary": "17 real user input handlers were identified (0 false positives). 10 handlers are high priority (1 critical, 9 high) due to unauthenticated sensitive operations, cross-user data exposure, and content-manipulation risks. The single critical item is unauthenticated account registration with indications of potential mass-assignment and business logic gaps. High-risk items cluster around authentication, feed exposure, media retrieval, and social interactions (comments/likes), with themes of IDOR, authorization bypass, stored/reflected XSS, and weak anti-abuse controls.\n\nImmediate review should tackle auth_register and auth_login first, then unauthenticated read endpoints (feed_latest, feed_by_user, images_retrieve, images_get_likes), followed by authenticated media/social mutation endpoints (images_generate_upload_link; images_comment create/update/delete). Reviewers should validate strict allow-listing for model binding, object-level authorization on every data fetch/mutation, robust output encoding for user-generated content, and proper rate limiting/pagination to limit scraping and brute-force risk.",
+  "recommendations": [
+    "Begin with quick threat models per endpoint (data sensitivity, actor, trust boundaries), then deep dive code review with test requests.",
+    "Verify object-level authorization is enforced server-side for every ID-bearing path/body parameter (no client-trust).",
+    "Check input handling: explicit schemas with allow-lists, type/length constraints, and safe ORM usage (no string-concatenated queries).",
+    "Validate output encoding/sanitization for user content (comments/filenames), and ensure tokens/cookies have secure flags and short lifetimes.",
+    "Exercise endpoints with both authenticated and unauthenticated clients, including blocked/private cases, to probe IDOR and authorization bypass."
+  ]
+}
