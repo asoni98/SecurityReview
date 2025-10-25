@@ -88,11 +88,12 @@ python analyze.py [OPTIONS]
 | `--target PATH` | Target codebase directory | Current directory |
 | `--rules PATH` | Directory with ast-grep rules | `./rules` |
 | `--model MODEL` | AI model to use | `openai:gpt-4o` |
-| `--output FILE` | Output file path | stdout |
-| `--format FORMAT` | Output format: json, markdown, text | `text` |
+| `--output FILE` | Output file path (required for jsonl format) | stdout |
+| `--format FORMAT` | Output format: json, jsonl, markdown, text | `text` |
 | `--min-risk LEVEL` | Minimum risk level: critical, high, medium, low, info | `info` |
 | `--max-findings N` | Limit number of findings to analyze | All |
 | `--context-lines N` | Lines of code context to analyze | 30 |
+| `--max-real-handlers N` | Stop after finding N real handlers | All |
 
 ### Supported Models
 
@@ -140,6 +141,76 @@ python analyze.py \
   --format json \
   --output full-analysis.json \
   --context-lines 50
+```
+
+## Streaming Output with JSONL
+
+For large codebases or when you want to pipeline results to another agent, use the **JSONL (JSON Lines)** format:
+
+```bash
+python analyze.py \
+  --target /path/to/codebase \
+  --format jsonl \
+  --output findings.jsonl
+```
+
+### Benefits of JSONL Format
+
+1. **Streaming**: Each finding is written to the file immediately after analysis, not at the end
+2. **Pipelining**: The next agent can start processing findings while analysis is still running
+3. **Memory Efficient**: No need to hold all findings in memory
+4. **Interruptible**: If interrupted, you still have partial results
+
+### JSONL Output Format
+
+Each line is a complete JSON object representing a `FunctionAnalysis`:
+
+```jsonl
+{"function_name":"handleUpload","location":{"file_path":"src/api/upload.js","line_number":45},"framework":"Express","language":"javascript","risk_level":"critical",...}
+{"function_name":"getUser","location":{"file_path":"src/api/users.js","line_number":12},"framework":"Express","language":"javascript","risk_level":"high",...}
+{"function_name":"createPost","location":{"file_path":"src/api/posts.js","line_number":89},"framework":"Express","language":"javascript","risk_level":"medium",...}
+```
+
+### Reading JSONL Output
+
+Process findings as they're written:
+
+```bash
+# In one terminal: run analysis (streaming)
+python analyze.py --target . --format jsonl --output findings.jsonl
+
+# In another terminal: process findings in real-time
+tail -f findings.jsonl | while read line; do
+  echo "New finding: $(echo $line | jq -r '.function_name')"
+done
+```
+
+Load in Python:
+
+```python
+import json
+
+findings = []
+with open('findings.jsonl', 'r') as f:
+    for line in f:
+        finding = json.loads(line)
+        findings.append(finding)
+        # Or process immediately:
+        if finding['risk_level'] in ['critical', 'high']:
+            print(f"High-risk finding: {finding['function_name']}")
+```
+
+### Pipeline with Next Agent
+
+```bash
+# Start analysis in streaming mode
+python analyze.py --target . --format jsonl --output sources.jsonl &
+
+# As findings are written, process them with another agent
+tail -f sources.jsonl | while read line; do
+  # Extract finding details
+  echo "$line" | python next_agent.py
+done
 ```
 
 ## Output Format

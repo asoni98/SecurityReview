@@ -70,9 +70,9 @@ Environment Variables:
 
     parser.add_argument(
         "--format",
-        choices=["json", "markdown", "text"],
+        choices=["json", "jsonl", "markdown", "text"],
         default="text",
-        help="Output format (default: text)",
+        help="Output format (default: text). Use 'jsonl' for streaming JSON Lines output.",
     )
 
     parser.add_argument(
@@ -470,28 +470,49 @@ async def main():
     def code_reader(file_path: str, line_num: int) -> Optional[str]:
         return scanner.read_code_context(file_path, line_num, args.context_lines)
 
-    prioritized_findings = await agent.triage_all_findings(
-        findings, code_reader, max_real_handlers=args.max_real_handlers
-    )
+    # Handle JSONL streaming format differently
+    if args.format == "jsonl":
+        # For JSONL, we stream results as they're completed
+        if not args.output:
+            print("Error: JSONL format requires --output to be specified", file=sys.stderr)
+            sys.exit(1)
 
-    # Step 3: Output results
-    print("\n" + "=" * 80)
-    print("STEP 3: Generating Report")
-    print("=" * 80 + "\n")
+        # Open file for writing and stream results
+        with open(args.output, 'w') as f:
+            async for analysis in agent.triage_all_findings_streaming(
+                findings, code_reader, max_real_handlers=args.max_real_handlers
+            ):
+                # Write each analysis as a JSON line
+                json_line = analysis.model_dump_json()
+                f.write(json_line + '\n')
+                f.flush()  # Ensure immediate write for streaming
 
-    if args.format == "json":
-        output_text = prioritized_findings.model_dump_json(indent=2)
-    elif args.format == "markdown":
-        output_text = format_output_markdown(prioritized_findings, args)
-    else:  # text
-        output_text = format_output_text(prioritized_findings, args)
-
-    # Write to file or stdout
-    if args.output:
-        args.output.write_text(output_text)
-        print(f"Results written to: {args.output}")
+        print(f"\nResults streamed to: {args.output}")
+        print("(Each line is a separate JSON object - JSONL format)")
     else:
-        print(output_text)
+        # For other formats, use the original batch processing
+        prioritized_findings = await agent.triage_all_findings(
+            findings, code_reader, max_real_handlers=args.max_real_handlers
+        )
+
+        # Step 3: Output results
+        print("\n" + "=" * 80)
+        print("STEP 3: Generating Report")
+        print("=" * 80 + "\n")
+
+        if args.format == "json":
+            output_text = prioritized_findings.model_dump_json(indent=2)
+        elif args.format == "markdown":
+            output_text = format_output_markdown(prioritized_findings, args)
+        else:  # text
+            output_text = format_output_text(prioritized_findings, args)
+
+        # Write to file or stdout
+        if args.output:
+            args.output.write_text(output_text)
+            print(f"Results written to: {args.output}")
+        else:
+            print(output_text)
 
     print("\n" + "=" * 80)
     print("Analysis Complete")

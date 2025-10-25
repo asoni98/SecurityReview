@@ -265,6 +265,93 @@ Is this a REAL user input handler or FALSE_POSITIVE?"""
             # If fast check fails, assume it's real (will do full analysis)
             return False
 
+    async def triage_all_findings_streaming(
+        self,
+        findings: List[AstGrepFinding],
+        code_reader: callable,
+        max_real_handlers: int | None = None,
+    ):
+        """
+        Triage findings and yield each analysis as it's completed (for streaming).
+
+        Args:
+            findings: List of ast-grep findings
+            code_reader: Function to read code context (file_path, line_num) -> str
+            max_real_handlers: Stop after finding this many real handlers (None = no limit)
+
+        Yields:
+            FunctionAnalysis objects as they're completed
+        """
+        print(f"\nTriaging {len(findings)} potential user input handlers (streaming mode)...\n")
+
+        real_handler_count = 0
+        fast_filtered_count = 0
+        total_analyzed = 0
+
+        for i, finding in enumerate(findings, 1):
+            # Check if we've hit the quota for real handlers
+            if max_real_handlers and real_handler_count >= max_real_handlers:
+                print(
+                    f"\nReached quota of {max_real_handlers} real handlers. Stopping analysis."
+                )
+                break
+
+            # Simplified progress indicator
+            progress = f"[{i}/{len(findings)}]"
+
+            # Show what file is being scanned
+            print(
+                f"{progress} Scanning {finding.file_path}:{finding.line_number}...",
+                end=" ",
+                flush=True,
+            )
+
+            # Get code context
+            code_context = code_reader(finding.file_path, finding.line_number)
+            if not code_context:
+                print("⚠ Could not read code context, skipping")
+                continue
+
+            try:
+                # Fast filter check first (using cheap model)
+                is_false_positive = await self.fast_check_false_positive(
+                    finding, code_context
+                )
+
+                if is_false_positive:
+                    fast_filtered_count += 1
+                    print("○ False positive (fast filter)")
+                    continue  # Skip full analysis
+
+                # If it passed fast filter, do full analysis with GPT-5
+                analysis = await self.triage_function(finding, code_context)
+                total_analyzed += 1
+
+                # Show result on same line
+                if analysis.risk_level != RiskLevel.INFO:
+                    real_handler_count += 1
+                    print(
+                        f"✓ {analysis.risk_level.value.upper()}: {analysis.function_name}"
+                    )
+                else:
+                    print("○ False positive (detailed)")
+
+                # Yield the analysis immediately for streaming
+                yield analysis
+
+            except Exception as e:
+                print(f"✗ Error: {e}")
+                continue
+
+        # Print final summary
+        print(f"\n{'='*60}")
+        print(f"Streaming Analysis Complete:")
+        print(f"  Total scanned: {i} files")
+        print(f"  Fast filtered (cheap): {fast_filtered_count}")
+        print(f"  Deep analyzed (GPT-5): {total_analyzed}")
+        print(f"  Real handlers found: {real_handler_count}")
+        print(f"{'='*60}\n")
+
     async def triage_all_findings(
         self,
         findings: List[AstGrepFinding],
