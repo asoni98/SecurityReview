@@ -61,6 +61,38 @@ class CodeLocation(BaseModel):
     snippet: Optional[str] = None
 
 
+class DeploymentContext(BaseModel):
+    """Deployment and infrastructure context for a function."""
+    service_name: Optional[str] = Field(
+        None,
+        description="Name of the service/component this function belongs to"
+    )
+    trust_zone: Optional[str] = Field(
+        None,
+        description="Trust zone (e.g., Public Zone, Application Zone, Data Zone)"
+    )
+    network_exposure: Optional[str] = Field(
+        None,
+        description="Network exposure level (e.g., Internet-facing, Internal only)"
+    )
+    authentication_method: Optional[str] = Field(
+        None,
+        description="Authentication method used (e.g., OAuth2 JWT, IAM Role, mTLS)"
+    )
+    deployment_target: Optional[str] = Field(
+        None,
+        description="Where this service is deployed (e.g., ECS Fargate, Lambda, EC2)"
+    )
+    upstream_services: List[str] = Field(
+        default_factory=list,
+        description="Services that call this service"
+    )
+    downstream_services: List[str] = Field(
+        default_factory=list,
+        description="Services this service calls"
+    )
+
+
 class FunctionAnalysis(BaseModel):
     """Analysis of a single function handling user input."""
     function_name: str
@@ -107,6 +139,12 @@ class FunctionAnalysis(BaseModel):
     has_authorization_check: Optional[bool] = Field(
         None,
         description="Whether authorization checks are present"
+    )
+
+    # Deployment context
+    deployment_context: Optional[DeploymentContext] = Field(
+        None,
+        description="Deployment and infrastructure context"
     )
 
     reasoning: str = Field(

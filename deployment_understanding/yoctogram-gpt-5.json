@@ -1,0 +1,407 @@
+{
+  "application_name": "Yoctogram",
+  "description": "Monolithic FastAPI API deployed on ECS Fargate behind an HTTPS ALB, fronted by a CloudFront SPA distribution that proxies /api/* to the API. Data layer is Aurora PostgreSQL Serverless; media stored in S3 and delivered via CloudFront distributions. Dev environment uses docker-compose with Postgres, Valkey, and LocalStack.",
+  "services": {
+    "api-service": {
+      "name": "api-service",
+      "type": "API Service",
+      "purpose": "Primary FastAPI monolith serving all public REST endpoints for auth, users, images, feed, and social.",
+      "runtime": "Python 3.12 (FastAPI/Uvicorn)",
+      "deployment_target": "ECS Fargate",
+      "handles_user_input": true,
+      "network_exposure": "Internal only",
+      "upstream_services": [
+        "alb-api"
+      ],
+      "downstream_services": [
+        "aurora-postgres",
+        "s3-bucket-public-images",
+        "s3-bucket-private-images",
+        "cache-dev-valkey",
+        "postgres-dev",
+        "localstack-s3",
+        "secrets-manager"
+      ],
+      "repository_paths": [
+        "app/"
+      ]
+    },
+    "alb-api": {
+      "name": "alb-api",
+      "type": "Load Balancer",
+      "purpose": "Internet-facing HTTPS Application Load Balancer terminating TLS and routing to the ECS service.",
+      "runtime": "AWS Managed",
+      "deployment_target": "ALB",
+      "handles_user_input": true,
+      "network_exposure": "Internet-facing",
+      "upstream_services": [
+        "web-frontend",
+        "route53-dns"
+      ],
+      "downstream_services": [
+        "api-service"
+      ],
+      "repository_paths": [
+        "cdk/"
+      ]
+    },
+    "web-frontend": {
+      "name": "web-frontend",
+      "type": "Web Frontend (Static SPA CDN)",
+      "purpose": "CloudFront distribution serving SPA assets and proxying /api/* to the API endpoint.",
+      "runtime": "N/A (Static CDN + S3)",
+      "deployment_target": "CloudFront",
+      "handles_user_input": true,
+      "network_exposure": "Internet-facing",
+      "upstream_services": [
+        "route53-dns"
+      ],
+      "downstream_services": [
+        "alb-api",
+        "frontend-assets-bucket"
+      ],
+      "repository_paths": [
+        "cdk/"
+      ]
+    },
+    "images-cdn-public": {
+      "name": "images-cdn-public",
+      "type": "CDN",
+      "purpose": "CloudFront distribution delivering public images from the public S3 bucket.",
+      "runtime": "N/A (CDN)",
+      "deployment_target": "CloudFront",
+      "handles_user_input": true,
+      "network_exposure": "Internet-facing",
+      "upstream_services": [],
+      "downstream_services": [
+        "s3-bucket-public-images"
+      ],
+      "repository_paths": [
+        "cdk/"
+      ]
+    },
+    "images-cdn-private": {
+      "name": "images-cdn-private",
+      "type": "CDN",
+      "purpose": "CloudFront distribution delivering private images from the private S3 bucket.",
+      "runtime": "N/A (CDN)",
+      "deployment_target": "CloudFront",
+      "handles_user_input": true,
+      "network_exposure": "Internet-facing",
+      "upstream_services": [],
+      "downstream_services": [
+        "s3-bucket-private-images"
+      ],
+      "repository_paths": [
+        "cdk/"
+      ]
+    },
+    "s3-bucket-public-images": {
+      "name": "s3-bucket-public-images",
+      "type": "Object Storage",
+      "purpose": "Stores public images; accessed by API for presign operations and by CDN or clients for object GET/PUT via presigned URLs.",
+      "runtime": "AWS S3",
+      "deployment_target": "S3",
+      "handles_user_input": true,
+      "network_exposure": "Internet-facing",
+      "upstream_services": [
+        "api-service",
+        "images-cdn-public",
+        "web-frontend"
+      ],
+      "downstream_services": [],
+      "repository_paths": [
+        "cdk/"
+      ]
+    },
+    "s3-bucket-private-images": {
+      "name": "s3-bucket-private-images",
+      "type": "Object Storage",
+      "purpose": "Stores private images; accessed by API for presign operations and by CDN or clients for object GET/PUT via presigned URLs.",
+      "runtime": "AWS S3",
+      "deployment_target": "S3",
+      "handles_user_input": true,
+      "network_exposure": "Internet-facing",
+      "upstream_services": [
+        "api-service",
+        "images-cdn-private",
+        "web-frontend"
+      ],
+      "downstream_services": [],
+      "repository_paths": [
+        "cdk/"
+      ]
+    },
+    "frontend-assets-bucket": {
+      "name": "frontend-assets-bucket",
+      "type": "Object Storage",
+      "purpose": "S3 bucket hosting SPA static assets served by CloudFront.",
+      "runtime": "AWS S3",
+      "deployment_target": "S3",
+      "handles_user_input": true,
+      "network_exposure": "Internet-facing",
+      "upstream_services": [
+        "web-frontend"
+      ],
+      "downstream_services": [],
+      "repository_paths": [
+        "cdk/"
+      ]
+    },
+    "aurora-postgres": {
+      "name": "aurora-postgres",
+      "type": "Database",
+      "purpose": "Primary relational datastore (Aurora PostgreSQL Serverless v2) for users, images metadata, likes, and comments.",
+      "runtime": "PostgreSQL",
+      "deployment_target": "Aurora Serverless v2",
+      "handles_user_input": false,
+      "network_exposure": "Internal only",
+      "upstream_services": [
+        "api-service"
+      ],
+      "downstream_services": [],
+      "repository_paths": [
+        "cdk/"
+      ]
+    },
+    "secrets-manager": {
+      "name": "secrets-manager",
+      "type": "Secret Store",
+      "purpose": "Stores database credentials and app secrets injected into the ECS task.",
+      "runtime": "AWS Secrets Manager",
+      "deployment_target": "AWS Secrets Manager",
+      "handles_user_input": false,
+      "network_exposure": "Internal only",
+      "upstream_services": [
+        "api-service"
+      ],
+      "downstream_services": [],
+      "repository_paths": [
+        "cdk/"
+      ]
+    },
+    "route53-dns": {
+      "name": "route53-dns",
+      "type": "DNS",
+      "purpose": "Public hosted zone providing DNS for the SPA (CloudFront) and API (ALB) endpoints.",
+      "runtime": "AWS Route53",
+      "deployment_target": "Route53",
+      "handles_user_input": false,
+      "network_exposure": "Internet-facing",
+      "upstream_services": [],
+      "downstream_services": [
+        "web-frontend",
+        "alb-api"
+      ],
+      "repository_paths": [
+        "cdk/"
+      ]
+    },
+    "postgres-dev": {
+      "name": "postgres-dev",
+      "type": "Database",
+      "purpose": "Development PostgreSQL instance for local docker-compose environment.",
+      "runtime": "PostgreSQL 16",
+      "deployment_target": "Docker Compose",
+      "handles_user_input": false,
+      "network_exposure": "Internal only",
+      "upstream_services": [
+        "api-service"
+      ],
+      "downstream_services": [],
+      "repository_paths": []
+    },
+    "cache-dev-valkey": {
+      "name": "cache-dev-valkey",
+      "type": "Cache",
+      "purpose": "Development Redis-compatible cache for presigned URL caching and feed composition.",
+      "runtime": "Valkey (Redis-compatible)",
+      "deployment_target": "Docker Compose",
+      "handles_user_input": false,
+      "network_exposure": "Internal only",
+      "upstream_services": [
+        "api-service"
+      ],
+      "downstream_services": [],
+      "repository_paths": []
+    },
+    "localstack-s3": {
+      "name": "localstack-s3",
+      "type": "Object Storage Emulator",
+      "purpose": "Local AWS emulator providing S3 bucket for local upload/download flows.",
+      "runtime": "LocalStack",
+      "deployment_target": "Docker Compose",
+      "handles_user_input": false,
+      "network_exposure": "Internal only",
+      "upstream_services": [
+        "api-service"
+      ],
+      "downstream_services": [],
+      "repository_paths": [
+        "compose/localstack/"
+      ]
+    }
+  },
+  "trust_zones": [
+    {
+      "name": "Public Zone",
+      "description": "Services exposed to internet",
+      "services": [
+        "web-frontend",
+        "alb-api",
+        "images-cdn-public",
+        "images-cdn-private",
+        "route53-dns",
+        "s3-bucket-public-images",
+        "s3-bucket-private-images",
+        "frontend-assets-bucket"
+      ]
+    },
+    {
+      "name": "Application Zone",
+      "description": "Internal application services",
+      "services": [
+        "api-service"
+      ]
+    },
+    {
+      "name": "Data Zone",
+      "description": "Databases and data stores",
+      "services": [
+        "aurora-postgres",
+        "postgres-dev",
+        "cache-dev-valkey",
+        "localstack-s3",
+        "secrets-manager"
+      ]
+    }
+  ],
+  "communications": [
+    {
+      "from_service": "route53-dns",
+      "to_service": "web-frontend",
+      "protocol": "DNS A/AAAA (Alias to CloudFront)",
+      "auth_method": "None",
+      "sync_async": "Sync",
+      "data_type": "DNS resolution"
+    },
+    {
+      "from_service": "route53-dns",
+      "to_service": "alb-api",
+      "protocol": "DNS A/AAAA (Alias to ALB)",
+      "auth_method": "None",
+      "sync_async": "Sync",
+      "data_type": "DNS resolution"
+    },
+    {
+      "from_service": "web-frontend",
+      "to_service": "alb-api",
+      "protocol": "HTTPS",
+      "auth_method": "TLS (server-auth), no client auth",
+      "sync_async": "Sync",
+      "data_type": "API requests (JWT bearer in headers)"
+    },
+    {
+      "from_service": "alb-api",
+      "to_service": "api-service",
+      "protocol": "HTTP over TCP (ALB target)",
+      "auth_method": "Security Group allow (no mTLS)",
+      "sync_async": "Sync",
+      "data_type": "Proxied API traffic"
+    },
+    {
+      "from_service": "api-service",
+      "to_service": "aurora-postgres",
+      "protocol": "SQL over TCP 5432",
+      "auth_method": "Username/Password from Secrets Manager",
+      "sync_async": "Sync",
+      "data_type": "Application data (users, images metadata, likes, comments)"
+    },
+    {
+      "from_service": "api-service",
+      "to_service": "s3-bucket-public-images",
+      "protocol": "AWS S3 API over HTTPS",
+      "auth_method": "IAM Role (ECS task role)",
+      "sync_async": "Sync",
+      "data_type": "Presign operations, object metadata"
+    },
+    {
+      "from_service": "api-service",
+      "to_service": "s3-bucket-private-images",
+      "protocol": "AWS S3 API over HTTPS",
+      "auth_method": "IAM Role (ECS task role)",
+      "sync_async": "Sync",
+      "data_type": "Presign operations, object metadata"
+    },
+    {
+      "from_service": "images-cdn-public",
+      "to_service": "s3-bucket-public-images",
+      "protocol": "HTTPS (S3 origin)",
+      "auth_method": "CloudFront OAI/OAC",
+      "sync_async": "Sync",
+      "data_type": "Media object delivery"
+    },
+    {
+      "from_service": "images-cdn-private",
+      "to_service": "s3-bucket-private-images",
+      "protocol": "HTTPS (S3 origin)",
+      "auth_method": "CloudFront OAI/OAC",
+      "sync_async": "Sync",
+      "data_type": "Media object delivery"
+    },
+    {
+      "from_service": "web-frontend",
+      "to_service": "frontend-assets-bucket",
+      "protocol": "HTTPS (S3 origin)",
+      "auth_method": "CloudFront OAI/OAC",
+      "sync_async": "Sync",
+      "data_type": "Static asset delivery"
+    },
+    {
+      "from_service": "api-service",
+      "to_service": "cache-dev-valkey",
+      "protocol": "RESP over TCP",
+      "auth_method": "None/Unknown",
+      "sync_async": "Sync",
+      "data_type": "Cache entries (presigned URLs, feed composition)"
+    },
+    {
+      "from_service": "api-service",
+      "to_service": "secrets-manager",
+      "protocol": "AWS Secrets retrieval (control plane)",
+      "auth_method": "IAM Role (task execution/task role)",
+      "sync_async": "Sync",
+      "data_type": "Database credentials, app secrets"
+    },
+    {
+      "from_service": "api-service",
+      "to_service": "postgres-dev",
+      "protocol": "SQL over TCP 5432",
+      "auth_method": "Username/Password (env/config)",
+      "sync_async": "Sync",
+      "data_type": "Application data (dev)"
+    },
+    {
+      "from_service": "api-service",
+      "to_service": "localstack-s3",
+      "protocol": "S3 API over HTTP/HTTPS (emulated)",
+      "auth_method": "LocalStack credentials (emulated)",
+      "sync_async": "Sync",
+      "data_type": "Presign operations, object upload/download (dev)"
+    }
+  ],
+  "internet_facing_endpoints": [
+    "web-frontend",
+    "alb-api",
+    "images-cdn-public",
+    "images-cdn-private"
+  ],
+  "user_authentication_method": "OAuth2 Password Grant with JWT (HS256)",
+  "service_authentication_methods": [
+    "IAM Roles",
+    "Database credentials from Secrets Manager",
+    "CloudFront OAI/OAC to S3",
+    "S3 Pre-signed URLs",
+    "Security groups"
+  ]
+}

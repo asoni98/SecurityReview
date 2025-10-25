@@ -72,150 +72,79 @@ ${iacContext}
 </iac_context>
 
 <output_format>
-Create a comprehensive Markdown document with the following structure:
+Output ONLY valid JSON (no markdown, no code fences, no additional text) matching this exact schema:
 
-# Deployment Model
+{
+  "application_name": "string - name of the application",
+  "description": "string - brief overview of deployment architecture",
 
-## Executive Summary
-Brief overview of the deployment architecture and key security considerations.
+  "services": {
+    "service-name": {
+      "name": "string - service name",
+      "type": "string - API Service / Worker / Database / etc.",
+      "purpose": "string - brief description",
+      "runtime": "string - Node.js / Python / Go / etc.",
+      "deployment_target": "string - ECS / Lambda / K8s / etc.",
+      "handles_user_input": boolean,
+      "network_exposure": "string - Internet-facing or Internal only",
+      "upstream_services": ["list of services that call this service"],
+      "downstream_services": ["list of services this calls"],
+      "repository_paths": ["app/", "services/api/"]
+    }
+  },
 
-## Services Overview
+  "trust_zones": [
+    {
+      "name": "Public Zone",
+      "description": "Services exposed to internet",
+      "services": ["service-name-1", "service-name-2"]
+    },
+    {
+      "name": "Application Zone",
+      "description": "Internal application services",
+      "services": ["service-name-3"]
+    },
+    {
+      "name": "Data Zone",
+      "description": "Databases and data stores",
+      "services": ["database-1", "cache-1"]
+    }
+  ],
 
-### Service: [Service Name]
-- **Type**: [API Service / Worker / Background Job / etc.]
-- **Purpose**: [Brief description of service responsibility]
-- **Runtime**: [Node.js / Python / Go / etc.]
-- **Repository Path**: [services/service-name/] (directory only, not individual files)
-- **Deployment Target**: [ECS / Lambda / K8s / EC2 / etc.]
-- **Exposed Interfaces**:
-  - HTTP API: [Yes/No - endpoint patterns like /api/users/*]
-  - gRPC: [Yes/No - service definitions]
-  - Message Queue: [Topics published to / consumed from]
-  - Database: [Owns/accesses which databases]
-- **Dependencies**: [List of other services this service calls]
-- **Consumed By**: [List of services that call this service]
-- **Handles User Input**: [Yes/No - Direct user input or internal only]
+  "communications": [
+    {
+      "from_service": "api-service",
+      "to_service": "database",
+      "protocol": "SQL over TCP / HTTPS REST / gRPC / etc.",
+      "auth_method": "IAM Role / mTLS / JWT / etc.",
+      "sync_async": "Sync or Async",
+      "data_type": "User data / Events / etc."
+    }
+  ],
 
-## Network Topology
-### Internet-Facing Services
-List all services exposed to the internet with:
-- Load balancer/API gateway configuration
-- Public endpoints
-- Rate limiting / WAF configuration
+  "internet_facing_endpoints": [
+    "api-service",
+    "web-frontend"
+  ],
 
-### Internal Services
-List all internal-only services with:
-- Network isolation details (VPC, subnets, security groups)
-- Access restrictions
+  "user_authentication_method": "OAuth2 JWT / SAML / etc.",
 
-### Service Dependency Graph
-Create a visual diagram showing service relationships and communication patterns:
-\`\`\`
-[Internet/Users]
-       |
-       v
-[Load Balancer / API Gateway]
-       |
-       +---> [API Service] <---(HTTP)---> [Auth Service]
-       |         |                              |
-       |         +---(gRPC)---> [User Service]  |
-       |         |                   |          |
-       |         +---(Pub)-----> [Message Queue]
-       |                             |
-       |                           (Sub)
-       |                             v
-       +---> [Worker Service] ---(SQL)---> [Database]
-                                                |
-                                            [Cache]
-\`\`\`
+  "service_authentication_methods": [
+    "IAM Roles",
+    "mTLS",
+    "Service accounts"
+  ]
+}
 
-### Communication Protocols
-For each service-to-service connection:
-- **From → To**: Protocol, Auth Method, Data Type
-- Example: \`API Service → User Service\`: gRPC, mTLS, User Data
-
-## Authentication & Authorization
-
-### Service-to-Service Authentication
-- **Pattern**: [IAM Roles / Service Accounts / mTLS / API Keys]
-- **Implementation Details**: [specific configurations]
-
-### User Authentication
-- **Pattern**: [JWT / OAuth / Session-based]
-- **Provider**: [Auth0 / Cognito / Custom]
-- **Token Flow**: [description]
-
-### Authorization Model
-- **Type**: [RBAC / ABAC / ACL]
-- **Implementation**: [description]
-
-## Input Sources & Data Flow
-
-### User Input Entry Points
-For each service that accepts user input:
-- **Service**: [name]
-- **Input Type**: [HTTP requests / WebSocket / File upload / etc.]
-- **Validation**: [what validation exists]
-- **Rate Limiting**: [configuration]
-
-### Service Communication Matrix
-Create a table documenting all service-to-service communication:
-
-| From Service | To Service | Protocol | Auth Method | Sync/Async | Data Type | Purpose |
-|-------------|------------|----------|-------------|------------|-----------|---------|
-| API Service | User Service | gRPC | mTLS | Sync | User queries | User data retrieval |
-| API Service | Message Queue | AMQP | IAM Role | Async | Events | Task processing |
-| Worker Service | Message Queue | AMQP | IAM Role | Async | Events | Task consumption |
-| Worker Service | Database | PostgreSQL | IAM Auth | Sync | Records | Data persistence |
-
-## Security Boundaries
-
-### Trust Zones
-- **Public Zone**: Services exposed to internet
-- **Application Zone**: Internal application services
-- **Data Zone**: Databases and data stores
-
-### Critical Security Controls
-- Network segmentation
-- Authentication mechanisms
-- Authorization enforcement points
-- Input validation boundaries
-
-## Infrastructure Resources
-
-### Compute
-- List all compute resources (EC2, Lambda, ECS tasks, etc.)
-
-### Networking
-- VPCs, subnets, routing tables
-- Load balancers, API gateways
-- Security groups, NACLs
-
-### Data Stores
-- Databases, caches, object storage
-- Access patterns and security
-
-### IAM & Permissions
-- Service roles
-- User roles
-- Permission boundaries
-
-## Security Considerations
-
-### Attack Surface
-- Internet-facing endpoints
-- User input handling services
-- Authentication endpoints
-
-### Key Security Questions
-- Which services can be reached from the internet?
-- How is authentication enforced at each boundary?
-- What services handle untrusted user input?
-- How are secrets managed?
-- What monitoring/logging exists?
-
-## Recommendations
-List any security concerns or recommendations for improvement.
+**CRITICAL REQUIREMENTS**:
+1. Output MUST be valid JSON that can be parsed by JSON.parse()
+2. Do NOT wrap in markdown code fences (no \`\`\`json)
+3. Do NOT include any text before or after the JSON
+4. Include ALL services found in the codebase
+5. Map file paths to services using "repository_paths" array
+6. Identify which services are internet-facing vs internal
+7. Document ALL service-to-service communications
+8. If information is unclear, use null or empty array, don't omit fields
 
 </output_format>
 

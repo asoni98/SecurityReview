@@ -1,6 +1,6 @@
 """Pydantic-AI agent for security analysis of user input handlers."""
 
-from typing import List
+from typing import List, Optional
 
 from pydantic_ai import Agent
 
@@ -10,6 +10,11 @@ from models import (
     AstGrepFinding,
     RiskLevel,
 )
+
+try:
+    from deployment_parser import DeploymentModelParser
+except ImportError:
+    DeploymentModelParser = None
 
 
 # Fast false positive detection prompt
@@ -72,15 +77,22 @@ Be precise and concise. The next agent will do the deep vulnerability analysis -
 class SecurityTriageAgent:
     """AI agent for triaging and prioritizing user input handlers for security review."""
 
-    def __init__(self, model: str = "openai:gpt-5", api_key: str | None = None):
+    def __init__(
+        self,
+        model: str = "openai:gpt-5",
+        api_key: str | None = None,
+        deployment_parser: Optional[DeploymentModelParser] = None
+    ):
         """
         Initialize the security triage agent.
 
         Args:
             model: Model identifier (e.g., "openai:gpt-5", "anthropic:claude-3-5-sonnet-20241022")
             api_key: API key for the model provider
+            deployment_parser: Optional deployment model parser for enriching findings
         """
         self.model_name = model
+        self.deployment_parser = deployment_parser
 
         # Fast filter agent for quick false positive detection (uses cheaper/faster model)
         fast_model = "openai:gpt-5-mini" if "openai" in model else model
@@ -125,6 +137,7 @@ This is a TRIAGE report - the actual vulnerability hunting happens in the next p
         Returns:
             Triage analysis with priority and context for next reviewer
         """
+        # Build the base triage prompt
         triage_prompt = f"""Triage this potential user input handler found by ast-grep:
 
 **Location**: {finding.file_path}:{finding.line_number}
@@ -135,7 +148,26 @@ This is a TRIAGE report - the actual vulnerability hunting happens in the next p
 **Code Context**:
 ```{finding.language}
 {code_context}
-```
+```"""
+
+        # Add deployment context if available
+        if self.deployment_parser:
+            deployment_ctx = self.deployment_parser.get_deployment_context(finding.file_path)
+            if deployment_ctx:
+                triage_prompt += f"""
+
+**Deployment Context** (from infrastructure documentation):
+- Service: {deployment_ctx.service_name}
+- Trust Zone: {deployment_ctx.trust_zone or 'Unknown'}
+- Network Exposure: {deployment_ctx.network_exposure}
+- Deployment Target: {deployment_ctx.deployment_target}
+- Authentication Method: {deployment_ctx.authentication_method or 'Unknown'}
+- Upstream Services (who calls this): {', '.join(deployment_ctx.upstream_services) if deployment_ctx.upstream_services else 'None'}
+- Downstream Services (what this calls): {', '.join(deployment_ctx.downstream_services) if deployment_ctx.downstream_services else 'None'}
+
+This deployment context should inform your risk assessment. Internet-facing services in public trust zones handling unauthenticated input are higher risk."""
+
+        triage_prompt += """
 
 **Your task**: Determine if this is a real user input handler that needs security review, and assign the appropriate triage priority.
 
@@ -152,7 +184,15 @@ Extract the function/handler name, endpoint path, HTTP methods if visible.
 Provide clear, actionable reasoning for your triage decision."""
 
         result = await self.triage_agent.run(triage_prompt)
-        return result.output
+        analysis = result.output
+
+        # Enrich with deployment context if we have it
+        if self.deployment_parser:
+            deployment_ctx = self.deployment_parser.get_deployment_context(finding.file_path)
+            if deployment_ctx:
+                analysis.deployment_context = deployment_ctx
+
+        return analysis
 
     async def prioritize_findings(
         self, analyses: List[FunctionAnalysis]

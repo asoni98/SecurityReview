@@ -17,6 +17,11 @@ from scanner import AstGrepScanner
 from agent import SecurityTriageAgent
 from models import RiskLevel
 
+try:
+    from deployment_parser import DeploymentModelParser
+except ImportError:
+    DeploymentModelParser = None
+
 
 def parse_args():
     """Parse command line arguments."""
@@ -99,6 +104,18 @@ Environment Variables:
         "--max-real-handlers",
         type=int,
         help="Stop after finding this many real handlers (useful to limit GPT-5 calls)",
+    )
+
+    parser.add_argument(
+        "--deployment-model",
+        type=Path,
+        help="Path to deployment model JSON file for enriching findings with infrastructure context",
+    )
+
+    parser.add_argument(
+        "--debug-deployment",
+        action="store_true",
+        help="Enable debug logging for deployment context matching",
     )
 
     return parser.parse_args()
@@ -221,6 +238,26 @@ def format_output_text(findings, args):
         if analysis.input_sources:
             sources = ", ".join(s.value for s in analysis.input_sources)
             output.append(f"Input Sources: {sources}")
+
+        # Display deployment context if available
+        if analysis.deployment_context:
+            output.append("")
+            output.append("Deployment Context:")
+            ctx = analysis.deployment_context
+            if ctx.service_name:
+                output.append(f"  Service: {ctx.service_name}")
+            if ctx.trust_zone:
+                output.append(f"  Trust Zone: {ctx.trust_zone}")
+            if ctx.network_exposure:
+                output.append(f"  Network Exposure: {ctx.network_exposure}")
+            if ctx.deployment_target:
+                output.append(f"  Deployment Target: {ctx.deployment_target}")
+            if ctx.authentication_method:
+                output.append(f"  Auth Method: {ctx.authentication_method}")
+            if ctx.upstream_services:
+                output.append(f"  Upstream: {', '.join(ctx.upstream_services)}")
+            if ctx.downstream_services:
+                output.append(f"  Downstream: {', '.join(ctx.downstream_services)}")
 
         output.append("")
         output.append("Security Assessment:")
@@ -363,6 +400,26 @@ def format_output_markdown(findings, args):
             sources = ", ".join(f"`{s.value}`" for s in analysis.input_sources)
             output.append(f"**Input Sources**: {sources}  ")
 
+        # Display deployment context if available
+        if analysis.deployment_context:
+            output.append("")
+            output.append("**Deployment Context**:  ")
+            ctx = analysis.deployment_context
+            if ctx.service_name:
+                output.append(f"- Service: `{ctx.service_name}`")
+            if ctx.trust_zone:
+                output.append(f"- Trust Zone: {ctx.trust_zone}")
+            if ctx.network_exposure:
+                output.append(f"- Network Exposure: {ctx.network_exposure}")
+            if ctx.deployment_target:
+                output.append(f"- Deployment Target: {ctx.deployment_target}")
+            if ctx.authentication_method:
+                output.append(f"- Auth Method: {ctx.authentication_method}")
+            if ctx.upstream_services:
+                output.append(f"- Upstream Services: {', '.join(f'`{s}`' for s in ctx.upstream_services)}")
+            if ctx.downstream_services:
+                output.append(f"- Downstream Services: {', '.join(f'`{s}`' for s in ctx.downstream_services)}")
+
         output.append("")
 
         if analysis.security_concerns:
@@ -464,7 +521,30 @@ async def main():
     print("STEP 2: Triaging findings with AI")
     print("-" * 80)
 
-    agent = SecurityTriageAgent(model=args.model)
+    # Parse deployment model if provided
+    deployment_parser = None
+    if args.deployment_model:
+        if not DeploymentModelParser:
+            print("Warning: deployment_parser module not available, skipping deployment context enrichment")
+        elif not args.deployment_model.exists():
+            print(f"Warning: Deployment model file not found: {args.deployment_model}")
+        else:
+            print(f"Loading deployment model from: {args.deployment_model}")
+            deployment_parser = DeploymentModelParser(
+                args.deployment_model,
+                debug=args.debug_deployment
+            )
+            print(f"  Found {len(deployment_parser.services)} services")
+            print(f"  Found {len(deployment_parser.trust_zones)} trust zones")
+            if args.debug_deployment:
+                print("\n  Service repository paths:")
+                for svc_name, svc_info in deployment_parser.services.items():
+                    paths = svc_info.get('repository_paths', [])
+                    if paths:
+                        print(f"    {svc_name}: {paths}")
+            print("")
+
+    agent = SecurityTriageAgent(model=args.model, deployment_parser=deployment_parser)
 
     # Create code reader function
     def code_reader(file_path: str, line_num: int) -> Optional[str]:

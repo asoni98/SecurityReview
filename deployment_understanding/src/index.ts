@@ -7,16 +7,16 @@ async function main() {
     // Parse command line arguments
     const codebasePath = process.argv[2];
     const iacPath = process.argv[3];
-    const outputPath = process.argv[4] ?? "./deployment_model.md";
+    const outputPath = process.argv[4] ?? "./deployment_model.json";
 
     if (!codebasePath || !iacPath) {
         console.error("Usage: npm start <codebase-path> <iac-path> [output-path]");
         console.error("\nExample:");
-        console.error("  npm start /path/to/monorepo /path/to/terraform deployment_model.md");
+        console.error("  npm start /path/to/monorepo /path/to/terraform deployment_model.json");
         console.error("\nArguments:");
         console.error("  codebase-path  Path to the application codebase/monorepo");
         console.error("  iac-path       Path to Infrastructure as Code (Terraform/CDK/Pulumi)");
-        console.error("  output-path    Output file for deployment model (default: deployment_model.md)");
+        console.error("  output-path    Output file for deployment model JSON (default: deployment_model.json)");
         process.exit(1);
     }
 
@@ -129,21 +129,56 @@ Include actual configuration snippets for critical security settings.
 
     // Step 3: Generate deployment model
     console.log("📝 Step 3: Generating deployment model...");
-    const deploymentModel = await runPrompt(
+    const deploymentModelRaw = await runPrompt(
         buildDeploymentAnalysisPrompt({
             codebaseContext: codebaseResult.finalResponse,
             iacContext: iacResult.finalResponse,
         })
     );
 
-    // Write to output file
-    writeFileSync(outputPath, deploymentModel, "utf8");
-    console.log(`\n✅ Deployment model written to: ${outputPath}`);
-    console.log("\n📖 Review the deployment model to understand:");
-    console.log("   - Which services are internet-facing vs internal");
-    console.log("   - Authentication and authorization flows");
-    console.log("   - Service-to-service communication patterns");
-    console.log("   - Which services handle user input");
+    // Parse and validate JSON
+    console.log("🔍 Validating JSON output...");
+    let deploymentModel;
+    try {
+        // Remove any markdown code fences if present
+        let cleaned = deploymentModelRaw.trim();
+        if (cleaned.startsWith("```json")) {
+            cleaned = cleaned.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+        } else if (cleaned.startsWith("```")) {
+            cleaned = cleaned.replace(/^```\s*/, "").replace(/\s*```$/, "");
+        }
+
+        deploymentModel = JSON.parse(cleaned);
+        console.log("✅ Valid JSON generated");
+    } catch (error) {
+        console.error("❌ Failed to parse deployment model as JSON");
+        console.error("Error:", error);
+        console.error("\nRaw output:");
+        console.error(deploymentModelRaw.substring(0, 500) + "...");
+
+        // Write raw output for debugging
+        writeFileSync(outputPath + ".raw", deploymentModelRaw, "utf8");
+        console.error(`\n Raw output saved to: ${outputPath}.raw`);
+        process.exit(1);
+    }
+
+    // Write formatted JSON to output file
+    writeFileSync(outputPath, JSON.stringify(deploymentModel, null, 2), "utf8");
+    console.log(`\n✅ Deployment model JSON written to: ${outputPath}`);
+
+    // Print summary
+    console.log("\n📊 Deployment Model Summary:");
+    console.log(`   Application: ${deploymentModel.application_name || "Unknown"}`);
+    console.log(`   Services: ${Object.keys(deploymentModel.services || {}).length}`);
+    console.log(`   Trust Zones: ${(deploymentModel.trust_zones || []).length}`);
+    console.log(`   Communications: ${(deploymentModel.communications || []).length}`);
+    console.log(`   Internet-Facing: ${(deploymentModel.internet_facing_endpoints || []).join(", ")}`);
+
+    console.log("\n📖 Use this JSON file with security analysis tools to:");
+    console.log("   - Enrich source validation findings with deployment context");
+    console.log("   - Map code files to services and trust zones");
+    console.log("   - Understand service-to-service authentication");
+    console.log("   - Identify internet-facing vs internal components");
 }
 
 export default main();
