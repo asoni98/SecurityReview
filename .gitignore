@@ -1,3 +1,2 @@
 .env
-Trace/node_modules/*
-Trace/node_modules/
+*/node_modules/*
