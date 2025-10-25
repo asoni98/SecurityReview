@@ -1,0 +1,32 @@
+id: rocket-routes
+language: rust
+rule:
+  any:
+    - pattern: |
+        #[get($$$ARGS)]
+        fn $FUNC($$$PARAMS) -> $RET {
+          $$$BODY
+        }
+    - pattern: |
+        #[post($$$ARGS)]
+        fn $FUNC($$$PARAMS) -> $RET {
+          $$$BODY
+        }
+    - pattern: |
+        #[put($$$ARGS)]
+        fn $FUNC($$$PARAMS) -> $RET {
+          $$$BODY
+        }
+    - pattern: |
+        #[patch($$$ARGS)]
+        fn $FUNC($$$PARAMS) -> $RET {
+          $$$BODY
+        }
+    - pattern: |
+        #[delete($$$ARGS)]
+        fn $FUNC($$$PARAMS) -> $RET {
+          $$$BODY
+        }
+    - pattern: $ROCKET.mount($PATH, routes![$$$ROUTES])
+message: Rocket route handler found
+severity: info

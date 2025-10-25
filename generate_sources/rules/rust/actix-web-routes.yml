@@ -1,0 +1,37 @@
+id: actix-web-routes
+language: rust
+rule:
+  any:
+    - pattern: |
+        #[get($$$ARGS)]
+        async fn $FUNC($$$PARAMS) -> $RET {
+          $$$BODY
+        }
+    - pattern: |
+        #[post($$$ARGS)]
+        async fn $FUNC($$$PARAMS) -> $RET {
+          $$$BODY
+        }
+    - pattern: |
+        #[put($$$ARGS)]
+        async fn $FUNC($$$PARAMS) -> $RET {
+          $$$BODY
+        }
+    - pattern: |
+        #[patch($$$ARGS)]
+        async fn $FUNC($$$PARAMS) -> $RET {
+          $$$BODY
+        }
+    - pattern: |
+        #[delete($$$ARGS)]
+        async fn $FUNC($$$PARAMS) -> $RET {
+          $$$BODY
+        }
+    - pattern: |
+        #[route($$$ARGS)]
+        async fn $FUNC($$$PARAMS) -> $RET {
+          $$$BODY
+        }
+    - pattern: $APP.service($SERVICE)
+message: Actix-web route handler found
+severity: info

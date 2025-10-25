@@ -1,0 +1,36 @@
+id: jaxrs-routes
+language: java
+rule:
+  any:
+    - pattern: |
+        @Path($$$ARGS)
+        class $CLASS {
+          $$$BODY
+        }
+    - pattern: |
+        @GET
+        $MODS $RET $METHOD($$$PARAMS) {
+          $$$BODY
+        }
+    - pattern: |
+        @POST
+        $MODS $RET $METHOD($$$PARAMS) {
+          $$$BODY
+        }
+    - pattern: |
+        @PUT
+        $MODS $RET $METHOD($$$PARAMS) {
+          $$$BODY
+        }
+    - pattern: |
+        @PATCH
+        $MODS $RET $METHOD($$$PARAMS) {
+          $$$BODY
+        }
+    - pattern: |
+        @DELETE
+        $MODS $RET $METHOD($$$PARAMS) {
+          $$$BODY
+        }
+message: JAX-RS route handler found
+severity: info

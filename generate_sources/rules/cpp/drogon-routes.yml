@@ -1,0 +1,13 @@
+id: drogon-routes
+language: cpp
+rule:
+  any:
+    - pattern: |
+        void $METHOD(const HttpRequestPtr& $REQ, std::function<void (const HttpResponsePtr &)>&& $CALLBACK) $$$QUALIFIERS {
+          $$$BODY
+        }
+    - pattern: PATH_ADD($PATH, $$$METHODS)
+    - pattern: METHOD_ADD($CLASS::$METHOD, $$$ARGS)
+    - pattern: app().registerHandler($PATH, $$$ARGS)
+message: Drogon framework route handler found
+severity: info

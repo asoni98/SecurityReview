@@ -1,0 +1,17 @@
+id: tonic-grpc-routes
+language: rust
+rule:
+  any:
+    - pattern: |
+        async fn $METHOD(
+          &self,
+          request: Request<$REQ>,
+        ) -> Result<Response<$RES>, Status> {
+          $$$BODY
+        }
+    - pattern: |
+        impl $SERVICE for $IMPL {
+          $$$BODY
+        }
+message: tonic gRPC service method found
+severity: info

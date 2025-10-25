@@ -1,0 +1,12 @@
+id: crow-routes
+language: cpp
+rule:
+  any:
+    - pattern: CROW_ROUTE($APP, $PATH)
+    - pattern: |
+        CROW_ROUTE($APP, $PATH)
+        ([$$$CAPTURE]($$$PARAMS) {
+          $$$BODY
+        })
+message: Crow framework route handler found
+severity: info

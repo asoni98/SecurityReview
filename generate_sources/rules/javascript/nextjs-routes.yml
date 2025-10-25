@@ -1,0 +1,38 @@
+id: nextjs-api-routes
+language: typescript
+rule:
+  any:
+    - pattern: |
+        export default function handler($REQ, $RES) {
+          $$$BODY
+        }
+    - pattern: |
+        export default async function handler($REQ, $RES) {
+          $$$BODY
+        }
+    - pattern: |
+        export default ($REQ, $RES) => {
+          $$$BODY
+        }
+    - pattern: |
+        export async function GET($$$PARAMS) {
+          $$$BODY
+        }
+    - pattern: |
+        export async function POST($$$PARAMS) {
+          $$$BODY
+        }
+    - pattern: |
+        export async function PUT($$$PARAMS) {
+          $$$BODY
+        }
+    - pattern: |
+        export async function PATCH($$$PARAMS) {
+          $$$BODY
+        }
+    - pattern: |
+        export async function DELETE($$$PARAMS) {
+          $$$BODY
+        }
+message: Next.js API route handler found
+severity: info

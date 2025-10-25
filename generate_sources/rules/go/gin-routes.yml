@@ -1,0 +1,20 @@
+id: gin-routes
+language: go
+rule:
+  any:
+    - pattern: $ROUTER.GET($PATH, $$$HANDLERS)
+    - pattern: $ROUTER.POST($PATH, $$$HANDLERS)
+    - pattern: $ROUTER.PUT($PATH, $$$HANDLERS)
+    - pattern: $ROUTER.PATCH($PATH, $$$HANDLERS)
+    - pattern: $ROUTER.DELETE($PATH, $$$HANDLERS)
+    - pattern: $ROUTER.OPTIONS($PATH, $$$HANDLERS)
+    - pattern: $ROUTER.HEAD($PATH, $$$HANDLERS)
+    - pattern: $ROUTER.Any($PATH, $$$HANDLERS)
+    - pattern: $GROUP.GET($PATH, $$$HANDLERS)
+    - pattern: $GROUP.POST($PATH, $$$HANDLERS)
+    - pattern: |
+        func $FUNC(c *gin.Context) {
+          $$$BODY
+        }
+message: Gin framework route handler found
+severity: info

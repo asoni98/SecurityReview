@@ -1,0 +1,186 @@
+id: fastapi-routes
+language: python
+rule:
+  any:
+    # GET routes without return type
+    - pattern: |
+        @$APP.get($$$ARGS)
+        def $FUNC($$$PARAMS):
+            $$$BODY
+    - pattern: |
+        @$APP.get($$$ARGS)
+        async def $FUNC($$$PARAMS):
+            $$$BODY
+    - pattern: |
+        @$ROUTER.get($$$ARGS)
+        def $FUNC($$$PARAMS):
+            $$$BODY
+    - pattern: |
+        @$ROUTER.get($$$ARGS)
+        async def $FUNC($$$PARAMS):
+            $$$BODY
+    
+    # GET routes with return type
+    - pattern: |
+        @$APP.get($$$ARGS)
+        def $FUNC($$$PARAMS) -> $RETURN:
+            $$$BODY
+    - pattern: |
+        @$APP.get($$$ARGS)
+        async def $FUNC($$$PARAMS) -> $RETURN:
+            $$$BODY
+    - pattern: |
+        @$ROUTER.get($$$ARGS)
+        def $FUNC($$$PARAMS) -> $RETURN:
+            $$$BODY
+    - pattern: |
+        @$ROUTER.get($$$ARGS)
+        async def $FUNC($$$PARAMS) -> $RETURN:
+            $$$BODY
+    
+    # POST routes without return type
+    - pattern: |
+        @$APP.post($$$ARGS)
+        def $FUNC($$$PARAMS):
+            $$$BODY
+    - pattern: |
+        @$APP.post($$$ARGS)
+        async def $FUNC($$$PARAMS):
+            $$$BODY
+    - pattern: |
+        @$ROUTER.post($$$ARGS)
+        def $FUNC($$$PARAMS):
+            $$$BODY
+    - pattern: |
+        @$ROUTER.post($$$ARGS)
+        async def $FUNC($$$PARAMS):
+            $$$BODY
+    
+    # POST routes with return type
+    - pattern: |
+        @$APP.post($$$ARGS)
+        def $FUNC($$$PARAMS) -> $RETURN:
+            $$$BODY
+    - pattern: |
+        @$APP.post($$$ARGS)
+        async def $FUNC($$$PARAMS) -> $RETURN:
+            $$$BODY
+    - pattern: |
+        @$ROUTER.post($$$ARGS)
+        def $FUNC($$$PARAMS) -> $RETURN:
+            $$$BODY
+    - pattern: |
+        @$ROUTER.post($$$ARGS)
+        async def $FUNC($$$PARAMS) -> $RETURN:
+            $$$BODY
+    
+    # PUT routes without return type
+    - pattern: |
+        @$APP.put($$$ARGS)
+        def $FUNC($$$PARAMS):
+            $$$BODY
+    - pattern: |
+        @$APP.put($$$ARGS)
+        async def $FUNC($$$PARAMS):
+            $$$BODY
+    - pattern: |
+        @$ROUTER.put($$$ARGS)
+        def $FUNC($$$PARAMS):
+            $$$BODY
+    - pattern: |
+        @$ROUTER.put($$$ARGS)
+        async def $FUNC($$$PARAMS):
+            $$$BODY
+    
+    # PUT routes with return type
+    - pattern: |
+        @$APP.put($$$ARGS)
+        def $FUNC($$$PARAMS) -> $RETURN:
+            $$$BODY
+    - pattern: |
+        @$APP.put($$$ARGS)
+        async def $FUNC($$$PARAMS) -> $RETURN:
+            $$$BODY
+    - pattern: |
+        @$ROUTER.put($$$ARGS)
+        def $FUNC($$$PARAMS) -> $RETURN:
+            $$$BODY
+    - pattern: |
+        @$ROUTER.put($$$ARGS)
+        async def $FUNC($$$PARAMS) -> $RETURN:
+            $$$BODY
+    
+    # PATCH routes without return type
+    - pattern: |
+        @$APP.patch($$$ARGS)
+        def $FUNC($$$PARAMS):
+            $$$BODY
+    - pattern: |
+        @$APP.patch($$$ARGS)
+        async def $FUNC($$$PARAMS):
+            $$$BODY
+    - pattern: |
+        @$ROUTER.patch($$$ARGS)
+        def $FUNC($$$PARAMS):
+            $$$BODY
+    - pattern: |
+        @$ROUTER.patch($$$ARGS)
+        async def $FUNC($$$PARAMS):
+            $$$BODY
+    
+    # PATCH routes with return type
+    - pattern: |
+        @$APP.patch($$$ARGS)
+        def $FUNC($$$PARAMS) -> $RETURN:
+            $$$BODY
+    - pattern: |
+        @$APP.patch($$$ARGS)
+        async def $FUNC($$$PARAMS) -> $RETURN:
+            $$$BODY
+    - pattern: |
+        @$ROUTER.patch($$$ARGS)
+        def $FUNC($$$PARAMS) -> $RETURN:
+            $$$BODY
+    - pattern: |
+        @$ROUTER.patch($$$ARGS)
+        async def $FUNC($$$PARAMS) -> $RETURN:
+            $$$BODY
+    
+    # DELETE routes without return type
+    - pattern: |
+        @$APP.delete($$$ARGS)
+        def $FUNC($$$PARAMS):
+            $$$BODY
+    - pattern: |
+        @$APP.delete($$$ARGS)
+        async def $FUNC($$$PARAMS):
+            $$$BODY
+    - pattern: |
+        @$ROUTER.delete($$$ARGS)
+        def $FUNC($$$PARAMS):
+            $$$BODY
+    - pattern: |
+        @$ROUTER.delete($$$ARGS)
+        async def $FUNC($$$PARAMS):
+            $$$BODY
+    
+    # DELETE routes with return type
+    - pattern: |
+        @$APP.delete($$$ARGS)
+        def $FUNC($$$PARAMS) -> $RETURN:
+            $$$BODY
+    - pattern: |
+        @$APP.delete($$$ARGS)
+        async def $FUNC($$$PARAMS) -> $RETURN:
+            $$$BODY
+    - pattern: |
+        @$ROUTER.delete($$$ARGS)
+        def $FUNC($$$PARAMS) -> $RETURN:
+            $$$BODY
+    - pattern: |
+        @$ROUTER.delete($$$ARGS)
+        async def $FUNC($$$PARAMS) -> $RETURN:
+            $$$BODY
+
+message: FastAPI route handler found
+severity: info

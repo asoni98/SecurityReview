@@ -1,0 +1,26 @@
+id: oatpp-routes
+language: cpp
+rule:
+  any:
+    - pattern: |
+        ENDPOINT("GET", $PATH, $$$ARGS) {
+          $$$BODY
+        }
+    - pattern: |
+        ENDPOINT("POST", $PATH, $$$ARGS) {
+          $$$BODY
+        }
+    - pattern: |
+        ENDPOINT("PUT", $PATH, $$$ARGS) {
+          $$$BODY
+        }
+    - pattern: |
+        ENDPOINT("PATCH", $PATH, $$$ARGS) {
+          $$$BODY
+        }
+    - pattern: |
+        ENDPOINT("DELETE", $PATH, $$$ARGS) {
+          $$$BODY
+        }
+message: Oat++ endpoint found
+severity: info

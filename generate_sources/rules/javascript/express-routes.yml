@@ -1,0 +1,72 @@
+id: express-routes
+language: javascript
+rule:
+  any:
+    # Routes with inline handler functions (more specific to avoid axios/fetch matches)
+    - pattern: |
+        $APP.get($PATH, function($$$PARAMS) {
+          $$$BODY
+        })
+    - pattern: |
+        $APP.post($PATH, function($$$PARAMS) {
+          $$$BODY
+        })
+    - pattern: |
+        $APP.put($PATH, function($$$PARAMS) {
+          $$$BODY
+        })
+    - pattern: |
+        $APP.patch($PATH, function($$$PARAMS) {
+          $$$BODY
+        })
+    - pattern: |
+        $APP.delete($PATH, function($$$PARAMS) {
+          $$$BODY
+        })
+    # Arrow function handlers
+    - pattern: |
+        $APP.get($PATH, ($$$PARAMS) => {
+          $$$BODY
+        })
+    - pattern: |
+        $APP.post($PATH, ($$$PARAMS) => {
+          $$$BODY
+        })
+    - pattern: |
+        $APP.put($PATH, ($$$PARAMS) => {
+          $$$BODY
+        })
+    - pattern: |
+        $APP.patch($PATH, ($$$PARAMS) => {
+          $$$BODY
+        })
+    - pattern: |
+        $APP.delete($PATH, ($$$PARAMS) => {
+          $$$BODY
+        })
+    # Async arrow function handlers
+    - pattern: |
+        $APP.get($PATH, async ($$$PARAMS) => {
+          $$$BODY
+        })
+    - pattern: |
+        $APP.post($PATH, async ($$$PARAMS) => {
+          $$$BODY
+        })
+    - pattern: |
+        $APP.put($PATH, async ($$$PARAMS) => {
+          $$$BODY
+        })
+    - pattern: |
+        $APP.patch($PATH, async ($$$PARAMS) => {
+          $$$BODY
+        })
+    - pattern: |
+        $APP.delete($PATH, async ($$$PARAMS) => {
+          $$$BODY
+        })
+    # Router creation
+    - pattern: express.Router()
+    - pattern: Router()
+message: Express.js route handler found
+severity: info

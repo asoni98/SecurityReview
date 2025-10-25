@@ -1,0 +1,55 @@
+id: hono-routes
+language: typescript
+rule:
+  any:
+    # Look for route registration with async handler functions (more specific)
+    - pattern: |
+        $APP.get($PATH, async ($C) => {
+          $$$BODY
+        })
+    - pattern: |
+        $APP.post($PATH, async ($C) => {
+          $$$BODY
+        })
+    - pattern: |
+        $APP.put($PATH, async ($C) => {
+          $$$BODY
+        })
+    - pattern: |
+        $APP.patch($PATH, async ($C) => {
+          $$$BODY
+        })
+    - pattern: |
+        $APP.delete($PATH, async ($C) => {
+          $$$BODY
+        })
+    # Non-async handlers
+    - pattern: |
+        $APP.get($PATH, ($C) => {
+          $$$BODY
+        })
+    - pattern: |
+        $APP.post($PATH, ($C) => {
+          $$$BODY
+        })
+    - pattern: |
+        $APP.put($PATH, ($C) => {
+          $$$BODY
+        })
+    - pattern: |
+        $APP.patch($PATH, ($C) => {
+          $$$BODY
+        })
+    - pattern: |
+        $APP.delete($PATH, ($C) => {
+          $$$BODY
+        })
+    # Route groups/chaining
+    - pattern: $APP.route($PATH)
+    # Hono's on() method for custom methods
+    - pattern: |
+        $APP.on($METHOD, $PATH, async ($C) => {
+          $$$BODY
+        })
+message: Hono framework route handler found
+severity: info

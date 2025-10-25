@@ -1,0 +1,14 @@
+id: grpc-cpp-routes
+language: cpp
+rule:
+  any:
+    - pattern: |
+        Status $METHOD(ServerContext* $CONTEXT, const $REQ* $REQUEST, $RES* $RESPONSE) override {
+          $$$BODY
+        }
+    - pattern: |
+        void $METHOD(ServerContext* $CONTEXT, $$$PARAMS) {
+          $$$BODY
+        }
+message: gRPC C++ service method found
+severity: info

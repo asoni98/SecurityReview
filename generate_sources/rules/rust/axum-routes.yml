@@ -1,0 +1,18 @@
+id: axum-routes
+language: rust
+rule:
+  any:
+    - pattern: $ROUTER.get($PATH, $HANDLER)
+    - pattern: $ROUTER.post($PATH, $HANDLER)
+    - pattern: $ROUTER.put($PATH, $HANDLER)
+    - pattern: $ROUTER.patch($PATH, $HANDLER)
+    - pattern: $ROUTER.delete($PATH, $HANDLER)
+    - pattern: $ROUTER.route($PATH, get($HANDLER))
+    - pattern: $ROUTER.route($PATH, post($HANDLER))
+    - pattern: $ROUTER.route($PATH, put($HANDLER))
+    - pattern: $ROUTER.route($PATH, patch($HANDLER))
+    - pattern: $ROUTER.route($PATH, delete($HANDLER))
+    - pattern: $ROUTER.route($PATH, any($HANDLER))
+    - pattern: $ROUTER.nest($PATH, $ROUTES)
+message: Axum route handler found
+severity: info

@@ -1,0 +1,16 @@
+id: go-http-routes
+language: go
+rule:
+  any:
+    - pattern: http.HandleFunc($PATH, $HANDLER)
+    - pattern: http.Handle($PATH, $HANDLER)
+    - pattern: |
+        func $FUNC(w http.ResponseWriter, r *http.Request) {
+          $$$BODY
+        }
+    - pattern: |
+        func ($RECV) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+          $$$BODY
+        }
+message: Go net/http handler found
+severity: info

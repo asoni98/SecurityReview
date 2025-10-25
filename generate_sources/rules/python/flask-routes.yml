@@ -1,0 +1,34 @@
+id: flask-routes
+language: python
+rule:
+  any:
+    - pattern: |
+        @$APP.route($$$ARGS)
+        def $FUNC($$$PARAMS):
+            $$$BODY
+    - pattern: |
+        @$APP.get($$$ARGS)
+        def $FUNC($$$PARAMS):
+            $$$BODY
+    - pattern: |
+        @$APP.post($$$ARGS)
+        def $FUNC($$$PARAMS):
+            $$$BODY
+    - pattern: |
+        @$APP.put($$$ARGS)
+        def $FUNC($$$PARAMS):
+            $$$BODY
+    - pattern: |
+        @$APP.patch($$$ARGS)
+        def $FUNC($$$PARAMS):
+            $$$BODY
+    - pattern: |
+        @$APP.delete($$$ARGS)
+        def $FUNC($$$PARAMS):
+            $$$BODY
+    - pattern: |
+        @$BP.route($$$ARGS)
+        def $FUNC($$$PARAMS):
+            $$$BODY
+message: Flask route handler found
+severity: info

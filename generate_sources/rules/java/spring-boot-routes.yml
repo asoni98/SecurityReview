@@ -1,0 +1,51 @@
+id: spring-boot-routes
+language: java
+rule:
+  any:
+    - pattern: |
+        @RestController
+        class $CLASS {
+          $$$BODY
+        }
+    - pattern: |
+        @Controller
+        class $CLASS {
+          $$$BODY
+        }
+    - pattern: |
+        @RequestMapping($$$ARGS)
+        class $CLASS {
+          $$$BODY
+        }
+    - pattern: |
+        @GetMapping($$$ARGS)
+        $MODS $RET $METHOD($$$PARAMS) {
+          $$$BODY
+        }
+    - pattern: |
+        @PostMapping($$$ARGS)
+        $MODS $RET $METHOD($$$PARAMS) {
+          $$$BODY
+        }
+    - pattern: |
+        @PutMapping($$$ARGS)
+        $MODS $RET $METHOD($$$PARAMS) {
+          $$$BODY
+        }
+    - pattern: |
+        @PatchMapping($$$ARGS)
+        $MODS $RET $METHOD($$$PARAMS) {
+          $$$BODY
+        }
+    - pattern: |
+        @DeleteMapping($$$ARGS)
+        $MODS $RET $METHOD($$$PARAMS) {
+          $$$BODY
+        }
+    - pattern: |
+        @RequestMapping($$$ARGS)
+        $MODS $RET $METHOD($$$PARAMS) {
+          $$$BODY
+        }
+message: Spring Boot route handler found
+severity: info
