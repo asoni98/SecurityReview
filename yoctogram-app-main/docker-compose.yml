@@ -1,0 +1,87 @@
+# ONLY for running locally. Production use will not use docker-compose.
+
+services:
+  # PostgreSQL database service
+  postgres:
+    image: postgres:16-alpine # Use an official PostgreSQL image
+    environment:
+      POSTGRES_DB: yoctogram
+      POSTGRES_USER: insecure
+      POSTGRES_PASSWORD: "insecure_,#/?_problematic_chars"
+    ports:
+      - "127.0.0.1:5432:5432" # Map PostgreSQL port to the host machine
+    volumes:
+      - yoctogram_pgdata:/var/lib/postgresql/data
+    networks:
+      - yoctogram
+
+  # FastAPI images service
+  app:
+    build:
+      context: . # Path to your images service code
+      dockerfile: ./Dockerfile
+    ports:
+      - "127.0.0.1:8000:80" # Map FastAPI port to the host machine
+    depends_on:
+      - postgres # Ensure that the database service is started first
+      - localstack # Ensure that the localstack service is started first
+    environment:
+      PRODUCTION: false
+      DEBUG: false
+      FORWARD_FACING_HOSTNAME: localhost
+      POSTGRES_DB: yoctogram
+      POSTGRES_USER: insecure
+      POSTGRES_PASSWORD: "insecure_,#/?_problematic_chars"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_HOST: valkey
+      REDIS_PORT: 6379
+      JWT_SECRET_KEY: INSECURE-DONT-USE-FOR-PROD
+      S3_ENDPOINT: http://s3.localhost.localstack.cloud:4566
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      IMAGES_BUCKET: yoctogram-images
+    volumes:
+      - yoctogram_images:/uploads
+      - $HOME/.aws:/root/.aws:ro
+    networks:
+      - yoctogram
+    dns:
+      - 10.0.2.20
+
+  localstack:
+    # LocalStack's persistence is a paid feature, so use a community extension
+    image: gresau/localstack-persist
+    ports:
+      - "127.0.0.1:4566:4566"
+    environment:
+      PERSIST_S3: 1
+    volumes:
+      - yoctogram_localstack:/persisted-data
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./compose/localstack/init_s3.py:/etc/localstack/init/ready.d/init_s3.py"
+
+    networks:
+      yoctogram:
+        ipv4_address: 10.0.2.20
+
+  valkey:
+    image: valkey/valkey:7
+    ports:
+      - "127.0.0.1:6379:6379"
+    networks:
+      - yoctogram
+
+volumes:
+  yoctogram_pgdata:
+    external: true
+  yoctogram_images:
+    external: true
+  yoctogram_localstack:
+    external: true
+
+networks:
+  yoctogram:
+    ipam:
+      config:
+        - subnet: 10.0.2.0/24
