@@ -42,7 +42,7 @@ ${traceJson}
 
 <output_format>
 {
-    "sink_analysis_message": "Detailed explanation of your findings about the sink",
+    "sink_analysis_message": "Detailed explanation of your findings about the sink with arguments",
     "is_vulnerable": true/false,
     "sink_line": "Exact line of code where vulnerability exists",
     "sink_line_number": "Line number of the sink_line",
