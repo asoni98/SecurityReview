@@ -1,29 +1,10 @@
 import { Codex } from "@openai/codex-sdk";
 import { runPrompt } from "./openaiClient.js";
 import { buildStep1Prompt } from "../prompts/step1Analysis.js";
-import {createReadStream} from "fs";
-import {createInterface} from "readline";
 import { Tail } from 'tail';
 
-async function processFile(path: string): Promise<void> {
-  const fileStream = createReadStream(path, { encoding: "utf8" });
-  const rl = createInterface({ input: fileStream, crlfDelay: Infinity });
-
-  for await (const line of rl) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-
-    try {
-      const data = JSON.parse(trimmed);
-      await processTaintedSourceLine(data); // Sequentially await each async call
-    } catch (err) {
-      console.warn("⚠️ Invalid JSON line:", err);
-    }
-  }
-}
-
 async function processTaintedSourceLine(taintedSourceLine: any) {
-    const { function_name, location } = taintedSourceLine;
+    const { function_name, location, deployment_context } = taintedSourceLine;
     const filePath = location?.file_path ?? "unknown file";
     // console.log(filePath);
     const line = location?.line_number ?? "?";
@@ -84,7 +65,7 @@ async function processTaintedSourceLine(taintedSourceLine: any) {
 
     console.log("\n\nStack Trace:\n", finalResult);
 
-    const vulnerabilityAnalysisPrompt = buildStep1Prompt({ traceJson: finalResult });
+    const vulnerabilityAnalysisPrompt = buildStep1Prompt({ traceJson: finalResult, deploymentContext: deployment_context });
     // console.log("\n \n Vulnerability Analysis Prompt:\n", vulnerabilityAnalysisPrompt);
 
     console.log("Running Vulnerability Analysis of the trace...");

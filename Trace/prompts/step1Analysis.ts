@@ -1,9 +1,11 @@
 interface BuildStep1PromptParams {
     traceJson: string;
+    deploymentContext: string;
 }
 
 export function buildStep1Prompt({
     traceJson,
+    deploymentContext,
 }: BuildStep1PromptParams): string {
     return `You are an Security Vulnerability expert.
 We found that the attacker modified the code to cause a security vulnerability,
@@ -39,6 +41,10 @@ attacker-controlled data could be exploited.
 <trace_json>
 ${traceJson}
 </trace_json>
+
+<deployment_context>
+${deploymentContext}
+</deployment_context>
 
 <output_format>
 {
