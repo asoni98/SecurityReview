@@ -1,26 +1,14 @@
 import { Codex } from "@openai/codex-sdk";
-import { readFileSync } from "fs";
 import { runPrompt } from "./openaiClient.js";
 import { buildStep1Prompt } from "../prompts/step1Analysis.js";
+import { Tail } from 'tail';
 
-async function main() {
-    /*
-    uv run --with pydantic --with pydantic-ai --with openai \
-    python3 analyze.py \
-    --target ~/Documents/GitHub/infracourse/yoctogram-app-main \
-    --max-findings 100 \
-    --format json --output yoctogram.json
-    */
-    const inputPath = process.argv[2] ?? "../yoctogramSmall.json";
-    const index = Number(process.argv[3] ?? "0");
-    const data = JSON.parse(readFileSync(inputPath, "utf8"));
-    const finding = Array.isArray(data.findings) ? data.findings[index] : data;
-    if (!finding) throw new Error(`No finding at index ${index}`);
-    const { function_name, location } = finding;
+async function processTaintedSourceLine(taintedSourceLine: any) {
+    const { function_name, location, deployment_context } = taintedSourceLine;
     const filePath = location?.file_path ?? "unknown file";
-    console.log(filePath);
+    // console.log(filePath);
     const line = location?.line_number ?? "?";
-    const context = JSON.stringify(finding, null, 2);
+    const context = JSON.stringify(taintedSourceLine, null, 2);
 
     // Add pruning for irrelevant functions. 
     const prompt = `
@@ -38,8 +26,8 @@ async function main() {
     const thread = codex.startThread();
 
     // Start the streamed run
-    console.log("Running Trace Agent...");
-    console.log(prompt);
+    // console.log("Running Trace Agent...");
+    // console.log(prompt);
     const resultStream = (await thread.runStreamed(prompt)).events;
 
     let finalResult = "";
@@ -55,15 +43,16 @@ async function main() {
         }
 
         if (!event.done) {
-            console.log(event.value)
+            // console.log(event.value)
         }
         
         if (event.done) {
-            console.log("Done!");
+            console.log("Done with the trace!");
             break;
         }
         if (event.value.type === "error") {
             console.log("Error breaking ...");
+            console.log(event.value);
             break;
         }
 
@@ -74,14 +63,53 @@ async function main() {
         }
     }
 
-    console.log("\n \n Stack Trace:\n", finalResult);
+    console.log("\n\nStack Trace:\n", finalResult);
 
-    const vulnerabilityAnalysisPrompt = buildStep1Prompt({ traceJson: finalResult });
-    console.log("\n \n Vulnerability Analysis Prompt:\n", vulnerabilityAnalysisPrompt);
+    const vulnerabilityAnalysisPrompt = buildStep1Prompt({ traceJson: finalResult, deploymentContext: deployment_context });
+    // console.log("\n \n Vulnerability Analysis Prompt:\n", vulnerabilityAnalysisPrompt);
 
-    console.log("Running VulnerabilityAnalysis of the trace...");
+    console.log("Running Vulnerability Analysis of the trace...");
     const vulnerabilityAnalysisResult = await runPrompt(vulnerabilityAnalysisPrompt);
-    console.log("\n \n Vulnerability Analysis Result:\n", vulnerabilityAnalysisResult);
+    console.log("\n\nVulnerability Analysis Result:\n", vulnerabilityAnalysisResult);
+}
+
+async function main() {
+    const taintedSourcePath = process.argv[2] ?? "../taintedSources.txt";
+
+    // Create a new Tail instance
+    const tail = new Tail(taintedSourcePath, {
+        fromBeginning: false,  // Only read new lines (not existing content)
+        follow: true,         // Continue watching for new lines
+        logger: console,      // Optional: log errors to console
+        useWatchFile: true,   // Use fs.watchFile for better reliability
+        fsWatchOptions: {     // Optional: customize watch behavior
+            interval: 1000    // Check every second
+        }
+    });
+
+
+    // Process each new line
+    tail.on('line', async (line: string) => {
+        await processTaintedSourceLine(JSON.parse(line));
+    });
+
+    // Handle errors
+    tail.on('error', (error: Error) => {
+        console.error('Error:', error);
+    });
+    
+    // Start watching
+    console.log(`Watching ${taintedSourcePath} for new lines...`);
+    
+    // Graceful shutdown
+    process.on('SIGINT', () => {
+        console.log('\nStopping file watcher...');
+        tail.unwatch();
+        process.exit(0);
+    });
+
+    // Keep the process alive
+    await new Promise(() => {});
 }
 
 export default main();
