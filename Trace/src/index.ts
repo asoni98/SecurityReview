@@ -73,7 +73,7 @@ async function processTaintedSourceLine(taintedSourceLine: any) {
     console.log("\n\nVulnerability Analysis Result:\n", vulnerabilityAnalysisResult);
 }
 
-async function main() {
+async function main() {    
     const taintedSourcePath = process.argv[2] ?? "../taintedSources.txt";
 
     // Create a new Tail instance
