@@ -1,7 +1,8 @@
 import { Codex } from "@openai/codex-sdk";
+import { createReadStream } from "fs";
+import { createInterface } from "readline";
 import { runPrompt } from "./openaiClient.js";
 import { buildStep1Prompt } from "../prompts/step1Analysis.js";
-import { Tail } from 'tail';
 
 async function processTaintedSourceLine(taintedSourceLine: any) {
     const { function_name, location, deployment_context } = taintedSourceLine;
@@ -65,7 +66,10 @@ async function processTaintedSourceLine(taintedSourceLine: any) {
 
     console.log("\n\nStack Trace:\n", finalResult);
 
-    const vulnerabilityAnalysisPrompt = buildStep1Prompt({ traceJson: finalResult, deploymentContext: deployment_context });
+    const vulnerabilityAnalysisPrompt = buildStep1Prompt({
+        traceJson: finalResult,
+        deploymentContext: deployment_context ?? "",
+    });
     // console.log("\n \n Vulnerability Analysis Prompt:\n", vulnerabilityAnalysisPrompt);
 
     console.log("Running Vulnerability Analysis of the trace...");
@@ -73,43 +77,28 @@ async function processTaintedSourceLine(taintedSourceLine: any) {
     console.log("\n\nVulnerability Analysis Result:\n", vulnerabilityAnalysisResult);
 }
 
-async function main() {    
+async function main() {
     const taintedSourcePath = process.argv[2] ?? "../taintedSources.txt";
+    const stream = createReadStream(taintedSourcePath, { encoding: "utf8" });
+    const rl = createInterface({
+        input: stream,
+        crlfDelay: Infinity,
+    });
 
-    // Create a new Tail instance
-    const tail = new Tail(taintedSourcePath, {
-        fromBeginning: false,  // Only read new lines (not existing content)
-        follow: true,         // Continue watching for new lines
-        logger: console,      // Optional: log errors to console
-        useWatchFile: true,   // Use fs.watchFile for better reliability
-        fsWatchOptions: {     // Optional: customize watch behavior
-            interval: 1000    // Check every second
+    try {
+        for await (const rawLine of rl) {
+            const line = rawLine.trim();
+            if (!line) continue;
+            try {
+                const parsed = JSON.parse(line);
+                await processTaintedSourceLine(parsed);
+            } catch (error) {
+                console.error("Failed to process line:", error);
+            }
         }
-    });
-
-
-    // Process each new line
-    tail.on('line', async (line: string) => {
-        await processTaintedSourceLine(JSON.parse(line));
-    });
-
-    // Handle errors
-    tail.on('error', (error: Error) => {
-        console.error('Error:', error);
-    });
-    
-    // Start watching
-    console.log(`Watching ${taintedSourcePath} for new lines...`);
-    
-    // Graceful shutdown
-    process.on('SIGINT', () => {
-        console.log('\nStopping file watcher...');
-        tail.unwatch();
-        process.exit(0);
-    });
-
-    // Keep the process alive
-    await new Promise(() => {});
+    } finally {
+        rl.close();
+    }
 }
 
 export default main();

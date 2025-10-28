@@ -215,37 +215,21 @@ if [[ -n "$deployment_model_path" ]]; then
     UV_CMD+=("--deployment-model" "$deployment_model_path")
 fi
 
-"${UV_CMD[@]}" &
-ANALYSIS_PID=$!
-
-echo "Source analyzer started (PID $ANALYSIS_PID). Waiting 10 seconds before launching Trace..."
-sleep 10
-
-if [[ ! -s "$TAINTED_OUTPUT" ]]; then
-    echo "Waiting for tainted output data..."
-    while [[ ! -s "$TAINTED_OUTPUT" ]]; do
-        if ! kill -0 "$ANALYSIS_PID" 2>/dev/null; then
-            break
-        fi
-        sleep 2
-    done
-fi
-
-echo "Starting Trace pipeline..."
-(cd "$TRACE_DIR" && npm start -- "$TAINTED_OUTPUT") &
-TRACE_PID=$!
-
-set +e
-wait "$ANALYSIS_PID"
+"${UV_CMD[@]}"
 ANALYSIS_STATUS=$?
-wait "$TRACE_PID"
-TRACE_STATUS=$?
-set -e
 
 if [[ $ANALYSIS_STATUS -ne 0 ]]; then
     echo "Source analyzer exited with status $ANALYSIS_STATUS" >&2
     exit $ANALYSIS_STATUS
 fi
+
+if [[ ! -s "$TAINTED_OUTPUT" ]]; then
+    echo "Warning: tainted sources output is empty; Trace will run but likely has no work." >&2
+fi
+
+echo "Starting Trace pipeline..."
+(cd "$TRACE_DIR" && npm start -- "$TAINTED_OUTPUT")
+TRACE_STATUS=$?
 
 if [[ $TRACE_STATUS -ne 0 ]]; then
     echo "Trace pipeline exited with status $TRACE_STATUS" >&2
