@@ -56,8 +56,8 @@ async function processTaintedSourceLine(taintedSourceLine: any) {
             break;
         }
 
-        // Stop if one step takes more than 3 minutes
-        if (Date.now() - currentTime > 3 * 60 * 1000) {
+        // Stop if one step takes more than 12 minutes
+        if (Date.now() - currentTime > 12 * 60 * 1000) {
             console.log("Timeout! Breaking ...");
             break;
         }
